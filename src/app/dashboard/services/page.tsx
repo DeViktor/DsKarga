@@ -81,7 +81,7 @@ export default function ServicesPage() {
                         <div className="text-sm text-muted-foreground space-y-2">
                             <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4"/>
-                            <span>Início: {format(service.requestDate.toDate(), "dd/MM/yyyy", { locale: pt })}</span>
+                            <span>Início: {format(service.requestDate, "dd/MM/yyyy", { locale: pt })}</span>
                             </div>
                             <div className="flex items-center gap-2">
                             <Users className="h-4 w-4"/>
@@ -128,7 +128,7 @@ export default function ServicesPage() {
                         <TableCell className="font-medium">{service.client}</TableCell>
                         <TableCell className="font-mono">{service.guideNumber}</TableCell>
                         <TableCell>
-                        {format(service.requestDate.toDate(), "dd/MM/yyyy", { locale: pt })}
+                        {format(service.requestDate, "dd/MM/yyyy", { locale: pt })}
                         </TableCell>
                         <TableCell>
                             <Badge variant={getStatusVariant(service.status)}>
@@ -225,7 +225,7 @@ export default function ServicesPage() {
             </TabsList>
         </Tabs>
 
-      <Card>
+      <Card className="w-full">
         <CardHeader>
           <CardTitle className="font-headline">Gestão de Requisições e Contratos</CardTitle>
           <CardDescription>

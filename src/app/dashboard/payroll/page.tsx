@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
   Card,
@@ -34,6 +34,7 @@ import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { useWorkers } from '@/hooks/use-workers';
 import Link from 'next/link';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 interface PayrollRun {
     id: string;
@@ -43,18 +44,44 @@ interface PayrollRun {
     processedAt: Date;
 }
 
-const initialPayrollRuns: PayrollRun[] = [
-    { id: 'pay-2024-07', period: 'Julho 2024', status: 'Pago', totalAmount: 15480000, processedAt: new Date(2024, 6, 25) },
-    { id: 'pay-2024-06', period: 'Junho 2024', status: 'Pago', totalAmount: 15320000, processedAt: new Date(2024, 5, 25) },
-];
-
 
 export default function PayrollPage() {
-    const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>(initialPayrollRuns);
+    const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
     const { toast } = useToast();
     const { workers } = useWorkers();
 
-    const handleProcessPayroll = () => {
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchPayrollRuns() {
+            setLoading(true);
+            try {
+                const supabase = getSupabaseClient();
+                const { data, error } = await supabase
+                    .from('payroll_runs')
+                    .select('*')
+                    .order('processed_at', { ascending: false });
+                if (error) throw error;
+                const normalized = (data || []).map((r: any) => ({
+                    id: r.id,
+                    period: r.period,
+                    status: r.status as PayrollRun['status'],
+                    totalAmount: r.total_amount || 0,
+                    processedAt: r.processed_at ? new Date(r.processed_at) : new Date(),
+                })) as PayrollRun[];
+                if (isMounted) setPayrollRuns(normalized);
+            } catch (err) {
+                console.error('Erro ao carregar folhas de pagamento do Supabase', err);
+                if (isMounted) setPayrollRuns([]);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
+        fetchPayrollRuns();
+        return () => { isMounted = false; };
+    }, []);
+
+    const handleProcessPayroll = async () => {
         const lastRunDate = payrollRuns.length > 0 ? payrollRuns[0].processedAt : new Date(2024, 6, 1);
         const nextMonth = new Date(lastRunDate);
         nextMonth.setMonth(nextMonth.getMonth() + 1);
@@ -68,14 +95,40 @@ export default function PayrollPage() {
         };
 
         setPayrollRuns(prev => [newRun, ...prev]);
+        try {
+            const supabase = getSupabaseClient();
+            const { error } = await supabase
+                .from('payroll_runs')
+                .insert({
+                    id: newRun.id,
+                    period: newRun.period,
+                    status: newRun.status,
+                    total_amount: newRun.totalAmount,
+                    processed_at: newRun.processedAt.toISOString(),
+                    created_at: new Date().toISOString(),
+                });
+            if (error) throw error;
+        } catch (err) {
+            console.error('Erro ao inserir folha de pagamento no Supabase', err);
+        }
         toast({
             title: "Processamento Iniciado",
             description: `A folha de pagamento para ${newRun.period} foi gerada e aguarda aprovação.`
         });
     };
 
-    const handleUpdateStatus = (id: string, newStatus: PayrollRun['status']) => {
+    const handleUpdateStatus = async (id: string, newStatus: PayrollRun['status']) => {
         setPayrollRuns(prev => prev.map(run => run.id === id ? { ...run, status: newStatus } : run));
+        try {
+            const supabase = getSupabaseClient();
+            const { error } = await supabase
+                .from('payroll_runs')
+                .update({ status: newStatus, updated_at: new Date().toISOString() })
+                .eq('id', id);
+            if (error) throw error;
+        } catch (err) {
+            console.error('Erro ao atualizar status no Supabase', err);
+        }
         toast({
             title: "Estado Atualizado",
             description: `A folha de pagamento foi marcada como "${newStatus}".`

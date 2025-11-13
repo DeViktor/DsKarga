@@ -1,34 +1,48 @@
 
 'use client';
 
-import { useMemo } from 'react';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { useEffect, useMemo, useState } from 'react';
 import { type Client } from '@/app/dashboard/clients/page';
-
-const mockClients: Client[] = [
-    { id: 'client-1', name: 'Cliente A (Exemplo)', nif: '5000123456', address: 'Cazenga', province: 'Luanda', country: 'Angola' },
-    { id: 'client-2', name: 'Cliente B (Exemplo)', nif: '5000234567', address: 'Viana', province: 'Luanda', country: 'Angola' },
-    { id: 'client-3', name: 'Cliente C (Exemplo)', nif: '5000345678', address: 'Cacuaco', province: 'Luanda', country: 'Angola' },
-    { id: 'client-4', name: 'Cliente D (Exemplo)', nif: '5000456789', address: 'Talatona', province: 'Luanda', country: 'Angola' },
-    { id: 'client-5', name: 'Cliente E (Exemplo)', nif: '5000567890', address: 'Belas', province: 'Luanda', country: 'Angola' },
-];
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 export function useClients() {
-    const firestore = useFirestore();
+    const [clients, setClients] = useState<Client[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
 
-    const clientsQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'clients'), orderBy('name'));
-    }, [firestore]);
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchClients() {
+            setLoading(true);
+            try {
+                const supabase = getSupabaseClient();
+                const { data, error } = await supabase
+                    .from('clients')
+                    .select('*')
+                    .order('name');
+                if (error) throw error;
+                const normalized = (data || []).map((c: any) => ({
+                    id: c.id,
+                    name: c.name,
+                    nif: c.nif,
+                    address: c.address,
+                    province: c.province,
+                    country: c.country,
+                })) as Client[];
+                if (isMounted) setClients(normalized);
+            } catch (err) {
+                console.error('Erro ao carregar clientes do Supabase', err);
+                if (isMounted) setClients([]);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
+        fetchClients();
+        return () => { isMounted = false; };
+    }, []);
 
-    const { data: firestoreClients, loading } = useCollection<Client>(clientsQuery);
-    
-    const allClients = useMemo(() => {
-        const combined = [...mockClients, ...(firestoreClients || [])];
-        const unique = Array.from(new Map(combined.map(item => [item.name, item])).values());
-        return unique.sort((a,b) => a.name.localeCompare(b.name));
-    }, [firestoreClients]);
+    const sortedClients = useMemo(() => {
+        return [...clients].sort((a, b) => a.name.localeCompare(b.name));
+    }, [clients]);
 
-    return { clients: allClients, loading };
+    return { clients: sortedClients, loading };
 }

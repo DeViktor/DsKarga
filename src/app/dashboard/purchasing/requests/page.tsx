@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
   Card,
@@ -22,12 +22,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, FileText, Loader2 } from "lucide-react";
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, orderBy, Timestamp } from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useRouter } from "next/navigation";
-import { addPurchaseOrder, updatePurchaseRequestStatus, type PurchaseRequest } from "@/firebase/firestore/purchasing";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 
@@ -42,35 +41,78 @@ const getStatusVariant = (status: string) => {
 };
 
 export default function PurchaseRequestsPage() {
-  const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
+  const [purchaseRequests, setPurchaseRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const requestsQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'purchase-requests'), orderBy('createdAt', 'desc'));
-  }, [firestore]);
-
-  const { data: purchaseRequests, loading } = useCollection<PurchaseRequest>(requestsQuery);
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchRequests() {
+      setLoading(true);
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from('purchase_requests')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        const normalized = (data || []).map((r: any) => ({
+          id: r.id,
+          requestNumber: r.request_number,
+          department: r.department,
+          items: r.items || [],
+          date: r.request_date ? new Date(r.request_date) : null,
+          status: r.status || 'Pendente',
+        }));
+        if (isMounted) setPurchaseRequests(normalized);
+      } catch (err) {
+        console.error('Erro ao carregar solicitações do Supabase', err);
+        if (isMounted) setPurchaseRequests([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    fetchRequests();
+    return () => { isMounted = false; };
+  }, []);
 
   const handleUpdateStatus = async (id: string, status: 'Aprovado' | 'Rejeitado') => {
-    if (!firestore) return;
     try {
-      await updatePurchaseRequestStatus(firestore, id, status);
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('purchase_requests')
+        .update({ status })
+        .eq('id', id);
+      if (error) throw error;
       toast({ title: "Sucesso", description: `Solicitação marcada como ${status.toLowerCase()}.` });
+      setPurchaseRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
     } catch (error) {
       toast({ title: "Erro", description: "Não foi possível atualizar o estado.", variant: "destructive"});
     }
   }
 
-  const handleGenerateOrder = async (request: PurchaseRequest) => {
-    if (!firestore) return;
+  const handleGenerateOrder = async (request: any) => {
     try {
-      await addPurchaseOrder(firestore, request);
+      const supabase = getSupabaseClient();
+      const orderNumber = `PO-${Date.now()}`;
+      const payload = {
+        order_number: orderNumber,
+        request_id: request.id,
+        request_number: request.requestNumber,
+        issue_date: new Date().toISOString(),
+        status: 'Em Aberto',
+        created_at: new Date().toISOString(),
+      };
+      const { error } = await supabase
+        .from('purchase_orders')
+        .insert(payload);
+      if (error) throw error;
       toast({ title: "Sucesso", description: "Ordem de compra gerada." });
       router.push('/dashboard/purchasing/orders');
     } catch (error) {
-       toast({ title: "Erro", description: "Não foi possível gerar a ordem de compra.", variant: "destructive"});
+       const message = error instanceof Error ? error.message : 'Não foi possível gerar a ordem de compra.';
+       toast({ title: "Erro", description: message, variant: "destructive"});
     }
   }
 
@@ -117,7 +159,7 @@ export default function PurchaseRequestsPage() {
                     {request.items.length > 1 && ` (+${request.items.length - 1})`}
                   </TableCell>
                   <TableCell>
-                    {request.date ? format((request.date as unknown as Timestamp).toDate(), 'dd/MM/yyyy', { locale: pt }) : 'A processar...'}
+                    {request.date ? format(request.date as Date, 'dd/MM/yyyy', { locale: pt }) : 'A processar...'}
                   </TableCell>
                   <TableCell>{request.items.length}</TableCell>
                   <TableCell className="text-center">

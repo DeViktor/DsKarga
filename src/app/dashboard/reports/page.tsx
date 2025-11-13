@@ -36,13 +36,47 @@ import { useCollection, useFirestore } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
 import { type PurchaseOrder } from '@/firebase/firestore/purchasing';
 import { type Transaction } from '@/components/dashboard/cash-flow/transaction-dialog';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
-// Mock data for reports - in a real app, this would come from state or API calls
-const initialTransactions: Transaction[] = [
-    { id: '1', date: new Date('2024-07-28'), description: 'Pagamento Fatura #0012 - Cliente A', type: 'receita', category: 'Vendas', amount: 850000 },
-    { id: '2', date: new Date('2024-07-25'), description: 'Pagamento de Salários - Julho', type: 'despesa', category: 'Salários', amount: 1200000 },
-    { id: '3', date: new Date('2024-07-22'), description: 'Compra de EPIs', type: 'despesa', category: 'Compras', amount: 350000 },
-];
+// Transações reais do Supabase
+function useTransactions(date: DateRange | undefined) {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchTransactions() {
+      setLoading(true);
+      try {
+        const supabase = getSupabaseClient();
+        const from = date?.from ? new Date(date.from) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const to = date?.to ? new Date(date.to) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('*')
+          .gte('date', from.toISOString())
+          .lte('date', to.toISOString());
+        if (error) throw error;
+        const normalized = (data || []).map((t: any) => ({
+          id: t.id,
+          date: t.date ? new Date(t.date) : new Date(),
+          description: t.description,
+          type: t.type,
+          category: t.category,
+          amount: Number(t.amount) || 0,
+        })) as Transaction[];
+        if (isMounted) setTransactions(normalized);
+      } catch (err) {
+        console.error('Erro ao carregar transações do Supabase', err);
+        if (isMounted) setTransactions([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    fetchTransactions();
+    return () => { isMounted = false; };
+  }, [date?.from?.toString(), date?.to?.toString()]);
+  return { transactions, loading };
+}
 
 
 type ReportData = { Categoria: string, Valor: string | number }[];
@@ -85,8 +119,7 @@ export default function ReportsPage() {
     const poQuery = useMemo(() => firestore ? query(collection(firestore, 'purchase-orders')) : null, [firestore]);
     const { data: purchaseOrders, loading: poLoading } = useCollection<PurchaseOrder>(poQuery);
 
-    const transactions = initialTransactions; // Using mock data for now
-    const transactionsLoading = false; // Mocking
+    const { transactions, loading: transactionsLoading } = useTransactions(date);
 
     const loading = workersLoading || servicesLoading || episLoading || poLoading || transactionsLoading;
 

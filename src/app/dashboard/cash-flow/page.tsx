@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
   Card,
@@ -31,17 +31,15 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import * as XLSX from 'xlsx';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 
-const initialTransactions: Transaction[] = [
-    { id: '1', date: new Date('2024-07-28'), description: 'Pagamento Fatura #0012 - Cliente A', type: 'receita', category: 'Vendas', amount: 850000 },
-    { id: '2', date: new Date('2024-07-25'), description: 'Pagamento de Salários - Julho', type: 'despesa', category: 'Salários', amount: 1200000 },
-    { id: '3', date: new Date('2024-07-22'), description: 'Compra de EPIs', type: 'despesa', category: 'Compras', amount: 350000 },
-];
+// Dados agora são carregados do Supabase
 
 
 export default function CashFlowPage() {
-    const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [loadingData, setLoadingData] = useState<boolean>(true);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogType, setDialogType] = useState<'receita' | 'despesa'>('receita');
     
@@ -51,9 +49,50 @@ export default function CashFlowPage() {
     });
     const [filterType, setFilterType] = useState<'all' | 'receita' | 'despesa'>('all');
 
+    // Fetch transactions from Supabase
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchTransactions() {
+            setLoadingData(true);
+            try {
+                const supabase = getSupabaseClient();
+                const { data, error } = await supabase
+                    .from('transactions')
+                    .select('*')
+                    .order('date', { ascending: false });
+                if (error) throw error;
+                const normalized = (data || []).map((t: any) => ({
+                    ...t,
+                    date: t.date ? new Date(t.date) : new Date(),
+                })) as Transaction[];
+                if (isMounted) setTransactions(normalized);
+            } catch (err) {
+                console.error('Erro ao carregar transações do Supabase', err);
+                if (isMounted) setTransactions([]);
+            } finally {
+                if (isMounted) setLoadingData(false);
+            }
+        }
+        fetchTransactions();
+        return () => { isMounted = false; };
+    }, []);
 
-    const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
+
+    const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
         setTransactions(prev => [...prev, { ...transaction, id: `trans-${Date.now()}` }]);
+        try {
+            const supabase = getSupabaseClient();
+            const { error } = await supabase
+                .from('transactions')
+                .insert({
+                    ...transaction,
+                    date: (transaction.date instanceof Date ? transaction.date : new Date()).toISOString(),
+                    created_at: new Date().toISOString(),
+                });
+            if (error) throw error;
+        } catch (err) {
+            console.error('Erro ao adicionar transação no Supabase', err);
+        }
     };
     
     const openDialog = (type: 'receita' | 'despesa') => {

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter, notFound } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import { DashboardHeader } from '@/components/dashboard/header';
@@ -13,42 +13,18 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 interface Accident {
     id: string;
-    datetime: { seconds: number };
+    datetime: string; // ISO string stored in Supabase
     workerName: string;
     clientUnit: string;
     type: 'sem-baixa' | 'com-baixa' | 'quase-acidente';
     severity: 'leve' | 'moderado' | 'grave';
     description: string;
     probableCause: string;
-}
-
-const mockAccidents: Accident[] = [
-    {
-        id: 'mock-1',
-        datetime: { seconds: Math.floor(new Date().getTime() / 1000) - 86400 * 5 }, // 5 days ago
-        workerName: 'Manuel Joaquim',
-        clientUnit: 'Cliente A',
-        type: 'sem-baixa',
-        severity: 'leve',
-        description: 'Escorregou no chão molhado, mas não sofreu ferimentos. Retomou ao trabalho imediatamente.',
-        probableCause: 'Chão molhado não sinalizado.'
-    },
-    {
-        id: 'mock-2',
-        datetime: { seconds: Math.floor(new Date().getTime() / 1000) - 86400 * 12 }, // 12 days ago
-        workerName: 'Sofia Costa',
-        clientUnit: 'Cliente B',
-        type: 'com-baixa',
-        severity: 'moderado',
-        description: 'Corte no braço esquerdo ao manusear material cortante sem luvas adequadas. Necessitou de sutura.',
-        probableCause: 'Não utilização do EPI correto (luvas de corte).'
-    }
-];
+};
 
 const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value: React.ReactNode }) => (
     <div>
@@ -81,22 +57,30 @@ export default function AccidentDetailPage() {
     const router = useRouter();
     const { toast } = useToast();
     const id = params.id as string;
-    
-    const firestore = useFirestore();
-    const accidentsQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'work-accidents'));
-    }, [firestore]);
 
-    const { data: firestoreAccidents, loading: accidentsLoading } = useCollection<Accident>(accidentsQuery);
+    const [accident, setAccident] = useState<Accident | null>(null);
+    const [loading, setLoading] = useState<boolean>(true);
 
-    const accident = useMemo(() => {
-        if (!id || accidentsLoading) return null;
-        const allAccidents = [...mockAccidents, ...(firestoreAccidents || [])];
-        return allAccidents.find(a => a.id === id) || null;
-    }, [id, firestoreAccidents, accidentsLoading]);
-
-    const loading = accidentsLoading;
+    useEffect(() => {
+        const supabase = getSupabaseClient();
+        const fetchAccident = async () => {
+            if (!id) return;
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('work_accidents')
+                .select('*')
+                .eq('id', id)
+                .maybeSingle();
+            if (error) {
+                console.error('Erro ao carregar acidente do Supabase', error);
+                setAccident(null);
+            } else {
+                setAccident(data as Accident);
+            }
+            setLoading(false);
+        };
+        fetchAccident();
+    }, [id]);
 
     if (loading) {
         return <div className="flex justify-center items-center h-full"><Loader2 className="h-16 w-16 animate-spin"/></div>
@@ -113,7 +97,7 @@ export default function AccidentDetailPage() {
     const downloadXLSX = () => {
         const dataToExport = [
             { Chave: 'ID do Relatório', Valor: accident.id },
-            { Chave: 'Data e Hora', Valor: format(accident.datetime.seconds * 1000, "dd/MM/yyyy HH:mm", { locale: pt }) },
+            { Chave: 'Data e Hora', Valor: format(new Date(accident.datetime), "dd/MM/yyyy HH:mm", { locale: pt }) },
             { Chave: 'Trabalhador Envolvido', Valor: accident.workerName },
             { Chave: 'Unidade / Cliente', Valor: accident.clientUnit },
             { Chave: 'Tipo de Incidente', Valor: getAccidentType(accident.type) },

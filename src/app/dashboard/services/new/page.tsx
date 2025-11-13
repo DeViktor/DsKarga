@@ -28,8 +28,7 @@ import { format } from 'date-fns';
 import { CalendarIcon, PlusCircle, Trash2, Users, Printer, Eraser, Search, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore } from '@/firebase';
-import { addRequisition } from '@/firebase/firestore/requisitions';
+import { addServiceRequisitionSupabase } from '@/lib/supabase/actions';
 import { ServiceRequisitionPrintLayout } from '@/components/dashboard/service-requisition-print-layout';
 import { type Client } from '@/app/dashboard/clients/page';
 import { useClients } from '@/hooks/use-clients';
@@ -67,7 +66,6 @@ export default function NewServicePage() {
   const pathname = usePathname();
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
-  const firestore = useFirestore();
   const [isPrinting, setIsPrinting] = useState(false);
 
   const { clients, loading: clientsLoading } = useClients();
@@ -110,22 +108,22 @@ export default function NewServicePage() {
     }
   }, [isPrinting, form]);
 
-  const onSubmit = (data: RequisitionFormValues) => {
-    if (!firestore) {
-        toast({
-            title: "Erro de Conexão",
-            description: "Não foi possível conectar à base de dados. Tente novamente.",
-            variant: "destructive"
-        });
-        return;
-    }
-    
-    addRequisition(firestore, data);
-    toast({
+  const onSubmit = async (data: RequisitionFormValues) => {
+    try {
+      await addServiceRequisitionSupabase(data);
+      toast({
         title: "Sucesso!",
         description: "O serviço foi submetido com sucesso.",
-    });
-    resetForm();
+      });
+      resetForm();
+    } catch (err: any) {
+      console.error("Falha ao submeter serviço no Supabase", err);
+      toast({
+        title: "Erro ao Submeter",
+        description: err?.message ?? "Não foi possível registar o serviço.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePrint = () => {

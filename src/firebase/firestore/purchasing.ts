@@ -46,18 +46,19 @@ export interface PurchaseRequest extends PurchaseRequestFormValues {
 async function getNextRequestNumber(firestore: Firestore): Promise<string> {
     const year = new Date().getFullYear();
     const ref = collection(firestore, 'purchase-requests');
-    const q = query(
-        ref,
-        where('requestNumber', '>=', `PR-${year}-0000`),
-        where('requestNumber', '<', `PR-${year + 1}-0000`),
-        orderBy('requestNumber', 'desc'),
-        limit(1)
-    );
+    // Order by creation time to fetch the latest request and increment its sequence.
+    // This avoids composite index requirements on requestNumber range queries.
+    const q = query(ref, orderBy('createdAt', 'desc'), limit(1));
     const snapshot = await getDocs(q);
     if (snapshot.empty) {
         return `PR-${year}-0001`;
     }
-    const lastNumber = snapshot.docs[0].data().requestNumber;
+    const docData = snapshot.docs[0].data() as { requestNumber?: string };
+    const lastNumber = docData.requestNumber;
+    if (!lastNumber || !lastNumber.startsWith(`PR-${year}-`)) {
+        // If last doc is from a previous year or missing, start fresh for the current year.
+        return `PR-${year}-0001`;
+    }
     const lastSequence = parseInt(lastNumber.split('-')[2], 10);
     const newSequence = (lastSequence + 1).toString().padStart(4, '0');
     return `PR-${year}-${newSequence}`;
@@ -66,12 +67,21 @@ async function getNextRequestNumber(firestore: Firestore): Promise<string> {
 export async function addPurchaseRequest(firestore: Firestore, data: PurchaseRequestFormValues) {
     const requestNumber = await getNextRequestNumber(firestore);
     const collectionRef = collection(firestore, 'purchase-requests');
-    await addDoc(collectionRef, {
-        ...data,
-        requestNumber,
-        status: 'Pendente',
-        createdAt: serverTimestamp(),
-    });
+    try {
+        await addDoc(collectionRef, {
+            ...data,
+            // Ensure Firestore stores a Timestamp instead of raw Date for consistency
+            date: Timestamp.fromDate(data.date),
+            requestNumber,
+            status: 'Pendente',
+            createdAt: serverTimestamp(),
+        });
+    } catch (error) {
+        if (error instanceof Error) {
+            throw new Error(error.message);
+        }
+        throw error;
+    }
 }
 
 export async function updatePurchaseRequestStatus(firestore: Firestore, id: string, status: PurchaseRequest['status']) {

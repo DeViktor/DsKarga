@@ -32,9 +32,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { addPurchaseRequest, type PurchaseRequestItem } from '@/firebase/firestore/purchasing';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 const requestItemSchema = z.object({
   id: z.string(),
@@ -55,7 +54,6 @@ export type PurchaseRequestFormValues = z.infer<typeof purchaseRequestSchema>;
 
 export default function PurchasingPage() {
   const router = useRouter();
-  const firestore = useFirestore();
   const { toast } = useToast();
 
   const form = useForm<PurchaseRequestFormValues>({
@@ -86,12 +84,23 @@ export default function PurchasingPage() {
   };
 
   const onSubmit = async (data: PurchaseRequestFormValues) => {
-    if (!firestore) {
-        toast({ title: "Erro", description: "Base de dados não está disponível.", variant: "destructive"});
-        return;
-    }
     try {
-      await addPurchaseRequest(firestore, data);
+      // Inline fallback: inserir solicitação diretamente no Supabase
+      const supabase = getSupabaseClient();
+      const requestNumber = `PR-${Date.now()}`;
+      const payload = {
+        request_number: requestNumber,
+        requester: data.requester ?? 'Admin',
+        department: data.department ?? '',
+        request_date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
+        justification: data.justification ?? '',
+        status: 'Pendente',
+        created_at: new Date().toISOString(),
+      };
+      const { error } = await supabase
+        .from('purchase_requests')
+        .insert(payload);
+      if (error) throw new Error(error.message || 'Falha ao criar solicitação de compra');
       toast({
         title: "Sucesso!",
         description: "A sua solicitação de compra foi enviada para aprovação.",
@@ -99,7 +108,8 @@ export default function PurchasingPage() {
       router.push('/dashboard/purchasing/requests');
     } catch (error) {
       console.error(error);
-      toast({ title: "Erro", description: "Não foi possível submeter a solicitação.", variant: "destructive"});
+      const message = error instanceof Error ? error.message : 'Não foi possível submeter a solicitação.';
+      toast({ title: "Erro", description: message, variant: "destructive"});
     }
   };
 

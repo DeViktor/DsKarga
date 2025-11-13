@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
@@ -22,8 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Eye, FilePlus, BarChart as BarChartIcon, ShieldAlert, Loader2, Users, Calendar as CalendarIcon, UserX } from "lucide-react";
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy, Timestamp } from 'firebase/firestore';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { format, addDays, eachDayOfInterval, startOfDay } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DateRange } from "react-day-picker"
@@ -36,7 +35,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, L
 
 interface SupervisionReport {
   id: string;
-  reportDate: string; // Storing as string from datetime-local input
+  reportDate: Date;
   client: string;
   activity: string;
   staffAllocated: number;
@@ -46,23 +45,54 @@ interface SupervisionReport {
   safetyIncidents?: string;
   prodGoal?: string;
   prodResult?: string;
-  createdAt: Timestamp;
+  createdAt: Date;
 }
 
 export default function SupervisionPage() {
-    const firestore = useFirestore();
+    const [allReports, setAllReports] = useState<SupervisionReport[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
     const [date, setDate] = useState<DateRange | undefined>({
       from: new Date(new Date().setMonth(new Date().getMonth() - 1)),
       to: new Date(),
     });
     const [selectedClient, setSelectedClient] = useState<string>('all');
 
-    const reportsQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'supervision-reports'), orderBy('createdAt', 'desc'));
-    }, [firestore]);
-
-    const { data: allReports, loading } = useCollection<SupervisionReport>(reportsQuery);
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchReports() {
+            setLoading(true);
+            try {
+                const supabase = getSupabaseClient();
+                const { data, error } = await supabase
+                    .from('supervision_reports')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                const normalized = (data || []).map((r: any) => ({
+                    id: r.id,
+                    reportDate: r.report_date ? new Date(r.report_date) : new Date(),
+                    client: r.client,
+                    activity: r.activity,
+                    staffAllocated: r.staff_allocated ?? 0,
+                    staffAbsences: r.staff_absences ?? 0,
+                    staffNormalHours: r.staff_normal_hours ?? 0,
+                    staffExtraHours: r.staff_extra_hours ?? 0,
+                    safetyIncidents: r.safety_incidents ?? '',
+                    prodGoal: r.prod_goal ?? '',
+                    prodResult: r.prod_result ?? '',
+                    createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+                })) as SupervisionReport[];
+                if (isMounted) setAllReports(normalized);
+            } catch (err) {
+                console.error('Erro ao carregar relatórios de supervisão do Supabase', err);
+                if (isMounted) setAllReports([]);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
+        fetchReports();
+        return () => { isMounted = false; };
+    }, []);
 
     const clients = useMemo(() => {
         if (!allReports) return [];
@@ -88,7 +118,7 @@ export default function SupervisionPage() {
 
       return reports.filter(report => {
         if (!report.createdAt) return false;
-        const reportDate = report.createdAt.toDate();
+        const reportDate = report.createdAt;
         return reportDate >= from && reportDate < to;
       });
     }, [allReports, date, selectedClient]);
@@ -125,8 +155,8 @@ export default function SupervisionPage() {
         const interval = eachDayOfInterval({ start: from, end: to });
 
         const reportsByDay = filteredReports.reduce((acc, report) => {
-             if (report.createdAt) {
-                const reportDay = format(report.createdAt.toDate(), 'dd/MM');
+            if (report.createdAt) {
+                const reportDay = format(report.createdAt, 'dd/MM');
                 if (!acc[reportDay]) {
                     acc[reportDay] = 0;
                 }
@@ -167,7 +197,7 @@ export default function SupervisionPage() {
                   id="date"
                   variant={"outline"}
                   className={cn(
-                    "w-[300px] justify-start text-left font-normal",
+                    "w-[300px]  justify-start text-left font-normal",
                     !date && "text-muted-foreground"
                   )}
                 >

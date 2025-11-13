@@ -44,12 +44,12 @@ export default function EpiInventoryPage() {
   
   const getStockStatus = (item: EpiItem) => {
     if (item.quantity === 0) {
-      return <Badge variant="destructive">Fora de Stock</Badge>;
+      return <Badge variant="destructive">Fora de Estoque</Badge>;
     }
     if (item.quantity <= item.lowStockThreshold) {
-      return <Badge variant="secondary">Stock Baixo</Badge>;
+      return <Badge variant="secondary">Estoque Baixo</Badge>;
     }
-    return <Badge>Em Stock</Badge>;
+    return <Badge>Em Estoque</Badge>;
   };
   
   const handleAddNewItem = () => {
@@ -65,9 +65,9 @@ export default function EpiInventoryPage() {
   return (
     <>
       <DashboardHeader title="Inventário de EPIs e Materiais">
-        <p className="text-sm text-muted-foreground hidden lg:block">Lista de todos os itens em stock.</p>
+        <p className="text-sm text-muted-foreground hidden lg:block">Lista de todos os itens em estoque.</p>
         <div className='flex-1' />
-        <Button variant="outline" onClick={() => setStockDialogOpen(true)}><PackagePlus className="mr-2 h-4 w-4" /> Entrada em Stock</Button>
+        <Button variant="outline" onClick={() => setStockDialogOpen(true)}><PackagePlus className="mr-2 h-4 w-4" /> Entrada em Estoque</Button>
         <Button onClick={handleAddNewItem}><PlusCircle className="mr-2 h-4 w-4" /> Adicionar Novo Item</Button>
       </DashboardHeader>
 
@@ -92,7 +92,7 @@ export default function EpiInventoryPage() {
                     </div>
                 </div>
                 <Button variant="ghost">
-                    Ordenar por Stock (Desc)
+                    Ordenar por Estoque (Desc)
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
             </div>
@@ -106,8 +106,8 @@ export default function EpiInventoryPage() {
                 <TableRow>
                   <TableHead>Produto</TableHead>
                   <TableHead>Categoria</TableHead>
-                  <TableHead className="text-center">Stock Atual</TableHead>
-                  <TableHead className="text-center">Stock Mín.</TableHead>
+                  <TableHead className="text-center">Estoque Atual</TableHead>
+                  <TableHead className="text-center">Estoque Mín.</TableHead>
                   <TableHead>Validade</TableHead>
                   <TableHead>Localização</TableHead>
                   <TableHead className='text-center'>Estado</TableHead>

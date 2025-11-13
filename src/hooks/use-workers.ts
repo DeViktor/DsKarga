@@ -1,51 +1,69 @@
 
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
 import { type Worker } from '@/app/dashboard/workers/page';
-import { useServices, type Service } from './use-services';
-import { workers as staticWorkers } from '@/lib/data';
+import { useServices } from './use-services';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 export interface WorkerWithService extends Worker {
   assignedToService?: boolean;
 }
 
-// THIS IS A MOCK HOOK. IT RETURNS STATIC DATA.
 export function useWorkers() {
-    const { services, loading: servicesLoading } = useServices();
-    const [workers, setWorkers] = useState<WorkerWithService[]>([]);
-    const [loading, setLoading] = useState(true);
+  const { services, loading: servicesLoading } = useServices();
+  const [workers, setWorkers] = useState<WorkerWithService[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
-    useEffect(() => {
-        // Simulate fetching
-        setLoading(true);
-        
-        // Start with static data
-        let baseWorkers = staticWorkers;
-        
-        // Enhance with service data if available
-        if (!servicesLoading && services) {
-            const activeAllocations = new Set<string>();
-            services.forEach(service => {
-                if (service.status === 'Ativo') {
-                    service.assignedWorkers?.forEach(worker => {
-                        activeAllocations.add(worker.id);
-                    });
-                }
-            });
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchWorkers() {
+      setLoading(true);
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from('workers')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
 
-            baseWorkers = baseWorkers.map(worker => ({
-                ...worker,
-                assignedToService: activeAllocations.has(worker.id),
-            }));
+        const normalized = (data || []).map((w: any) => ({
+          id: w.id,
+          name: w.name ?? '',
+          role: w.role ?? '',
+          department: w.department ?? '',
+          category: w.category ?? '',
+          baseSalary: Number(w.base_salary ?? w.baseSalary ?? 0),
+          contractStatus: (w.status ?? 'Ativo') as Worker['contractStatus'],
+          type: (w.type ?? 'Eventual') as Worker['type'],
+        })) as WorkerWithService[];
+
+        // Enriquecer com alocação a serviços ativos, se disponível
+        if (!servicesLoading && services && services.length > 0) {
+          const activeAllocations = new Set<string>();
+          services.forEach(service => {
+            if (service.status === 'Ativo') {
+              service.assignedWorkers?.forEach(worker => {
+                if (worker?.id) activeAllocations.add(worker.id);
+              });
+            }
+          });
+          normalized.forEach(w => {
+            w.assignedToService = activeAllocations.has(w.id);
+          });
         }
-        
-        setWorkers(baseWorkers as WorkerWithService[]);
-        setLoading(false);
 
-    }, [services, servicesLoading]);
-    
-    return { workers, loading };
+        if (isMounted) setWorkers(normalized);
+      } catch (err) {
+        console.error('Erro ao carregar trabalhadores do Supabase', err);
+        if (isMounted) setWorkers([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    fetchWorkers();
+    return () => { isMounted = false; };
+  }, [servicesLoading, services]);
+
+  return { workers, loading };
 }

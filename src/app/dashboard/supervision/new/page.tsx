@@ -23,8 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2, Download, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore } from '@/firebase';
-import { addSupervisionReport } from '@/firebase/firestore/supervision';
+import { addSupervisionReportSupabase } from '@/lib/supabase/actions';
 import { SupervisionReportPrintLayout } from '@/components/dashboard/supervision-report-print-layout';
 import { type Client } from '@/app/dashboard/clients/page';
 import { useClients } from '@/hooks/use-clients';
@@ -73,7 +72,6 @@ const FormSection = ({ title, description, children }: { title: string, descript
 
 export default function NewSupervisionReportPage() {
     const { toast } = useToast();
-    const firestore = useFirestore();
     const router = useRouter();
     const [lastReport, setLastReport] = useState<SupervisionReportFormValues | null>(null);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -123,14 +121,9 @@ export default function NewSupervisionReportPage() {
     }, [isPrinting]);
 
     const onSubmit = async (data: SupervisionReportFormValues) => {
-        if (!firestore) {
-            toast({ title: 'Erro', description: 'Base de dados não conectada.', variant: 'destructive'});
-            return;
-        }
-
         setSubmissionStatus('submitting');
         try {
-            await addSupervisionReport(firestore, data);
+            await addSupervisionReportSupabase(data);
             toast({ title: 'Sucesso!', description: 'Relatório diário submetido com sucesso.'});
             router.push('/dashboard/supervision');
         } catch (error) {

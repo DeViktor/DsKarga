@@ -3,10 +3,10 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, useRouter, notFound } from 'next/navigation';
-import { useFirestore, useDoc } from '@/firebase';
-import { doc, Timestamp } from 'firebase/firestore';
+// import { Timestamp } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
-import { type PurchaseRequest, updatePurchaseRequestStatus, addPurchaseOrder } from '@/firebase/firestore/purchasing';
+// Removed actions import; using Supabase client directly
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -34,15 +34,45 @@ export default function PurchaseRequestDetailPage() {
     const router = useRouter();
     const { toast } = useToast();
     const id = params.id as string;
-    const firestore = useFirestore();
     const [isPrinting, setIsPrinting] = useState(false);
+    const [request, setRequest] = useState<any | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    const requestRef = useMemo(() => {
-        if (!firestore || !id) return null;
-        return doc(firestore, 'purchase-requests', id);
-    }, [firestore, id]);
-
-    const { data: request, loading } = useDoc<PurchaseRequest>(requestRef);
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchRequest() {
+            setLoading(true);
+            try {
+                const supabase = getSupabaseClient();
+                const { data, error } = await supabase
+                    .from('purchase_requests')
+                    .select('*')
+                    .eq('id', id)
+                    .limit(1)
+                    .single();
+                if (error) throw error;
+                const normalized = data ? {
+                    id: data.id,
+                    requestNumber: data.request_number,
+                    requester: data.requester,
+                    department: data.department,
+                    date: data.request_date ? new Date(data.request_date) : null,
+                    justification: data.justification,
+                    items: data.items || [],
+                    status: data.status || 'Pendente',
+                    createdAt: data.created_at ? new Date(data.created_at) : null,
+                } : null;
+                if (isMounted) setRequest(normalized);
+            } catch (err) {
+                console.error('Erro ao carregar solicitação do Supabase', err);
+                if (isMounted) setRequest(null);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
+        if (id) fetchRequest();
+        return () => { isMounted = false; };
+    }, [id]);
 
     useEffect(() => {
         if (isPrinting) {
@@ -55,23 +85,42 @@ export default function PurchaseRequestDetailPage() {
     }, [isPrinting]);
 
      const handleUpdateStatus = async (status: 'Aprovado' | 'Rejeitado') => {
-        if (!firestore) return;
         try {
-        await updatePurchaseRequestStatus(firestore, id, status);
-        toast({ title: "Sucesso", description: `Solicitação marcada como ${status.toLowerCase()}.` });
+            const supabase = getSupabaseClient();
+            const { error } = await supabase
+              .from('purchase_requests')
+              .update({ status })
+              .eq('id', id);
+            if (error) throw error;
+            toast({ title: "Sucesso", description: `Solicitação marcada como ${status.toLowerCase()}.` });
+            setRequest(prev => prev ? { ...prev, status } : prev);
         } catch (error) {
-        toast({ title: "Erro", description: "Não foi possível atualizar o estado.", variant: "destructive"});
+            toast({ title: "Erro", description: "Não foi possível atualizar o estado.", variant: "destructive"});
         }
     }
 
     const handleGenerateOrder = async () => {
-        if (!firestore || !request) return;
+        if (!request) return;
         try {
-            await addPurchaseOrder(firestore, request);
+            const supabase = getSupabaseClient();
+            const orderNumber = `PO-${Date.now()}`;
+            const payload = {
+              order_number: orderNumber,
+              request_id: request.id,
+              request_number: request.requestNumber,
+              issue_date: new Date().toISOString(),
+              status: 'Em Aberto',
+              created_at: new Date().toISOString(),
+            };
+            const { error } = await supabase
+              .from('purchase_orders')
+              .insert(payload);
+            if (error) throw error;
             toast({ title: "Sucesso", description: "Ordem de compra gerada." });
             router.push('/dashboard/purchasing/orders');
         } catch (error) {
-            toast({ title: "Erro", description: "Não foi possível gerar a ordem de compra.", variant: "destructive"});
+            const message = error instanceof Error ? error.message : 'Não foi possível gerar a ordem de compra.';
+            toast({ title: "Erro", description: message, variant: "destructive"});
         }
     }
 
@@ -148,7 +197,7 @@ export default function PurchaseRequestDetailPage() {
                         <div>
                             <CardTitle className="font-headline text-2xl">Detalhes da Solicitação de Compra</CardTitle>
                             <CardDescription>
-                                {request.createdAt ? `Criado por ${request.requester} em ${format(request.createdAt.toDate(), "dd 'de' MMMM, yyyy", { locale: pt })}` : 'A processar...'}
+                                {request.createdAt ? `Criado por ${request.requester} em ${format(request.createdAt as Date, "dd 'de' MMMM, yyyy", { locale: pt })}` : 'A processar...'}
                             </CardDescription>
                         </div>
                         <Badge variant={getStatusVariant(request.status)} className="text-base px-4 py-1">{request.status}</Badge>
@@ -157,7 +206,7 @@ export default function PurchaseRequestDetailPage() {
                 <CardContent>
                     <div className="grid md:grid-cols-3 gap-4 mb-6">
                         <div><p className="text-sm text-muted-foreground">Departamento</p><p className="font-semibold">{request.department}</p></div>
-                        <div><p className="text-sm text-muted-foreground">Data da Necessidade</p><p className="font-semibold">{request.date ? format((request.date as unknown as Timestamp).toDate(), 'PPP', {locale: pt}) : 'N/A'}</p></div>
+                        <div><p className="text-sm text-muted-foreground">Data da Necessidade</p><p className="font-semibold">{request.date ? format(request.date as Date, 'PPP', {locale: pt}) : 'N/A'}</p></div>
                     </div>
                     <div className="mb-6">
                         <p className="text-sm text-muted-foreground">Justificação</p>

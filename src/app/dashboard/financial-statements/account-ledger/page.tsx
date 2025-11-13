@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardHeader } from "@/components/dashboard/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,19 +12,42 @@ import { format } from "date-fns";
 import { pt } from 'date-fns/locale';
 import { useRouter } from "next/navigation";
 import { pgcAccounts, type PGCAccount } from '@/lib/pgc-data';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
-// Mocked Journal Data
-const journalEntries: any[] = [
-    { id: '1', date: new Date('2024-07-28'), description: 'Venda a dinheiro - Fatura FT001', lines: [{ accountId: '43', debit: 850000, credit: 0 }, { accountId: '71', debit: 0, credit: 850000 }] },
-    { id: '2', date: new Date('2024-07-25'), description: 'Pagamento de Salários', lines: [{ accountId: '631', debit: 1200000, credit: 0 }, { accountId: '41', debit: 0, credit: 1200000 }] },
-    { id: '3', date: new Date('2024-07-22'), description: 'Compra de material de escritório', lines: [{ accountId: '26', debit: 350000, credit: 0 }, { accountId: '41', debit: 0, credit: 350000 }] },
-];
+export default function AccountLedgerPage() {
+  const [journalEntries, setJournalEntries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchJournal() {
+      setLoading(true);
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from('journal_entries')
+          .select('*');
+        if (error) throw error;
+        const normalized = (data || []).map((e: any) => ({
+          ...e,
+          date: e.date ? new Date(e.date) : undefined,
+        }));
+        if (isMounted) setJournalEntries(normalized);
+      } catch (err) {
+        console.error('Failed to load journal entries from Supabase', err);
+        if (isMounted) setJournalEntries([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    fetchJournal();
+    return () => { isMounted = false; };
+  }, []);
 
 const numberFormat = (value: number) => {
     return new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' }).format(value);
 };
 
-export default function AccountLedgerPage() {
     const router = useRouter();
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
