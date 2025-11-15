@@ -61,6 +61,30 @@ export default function AccidentDetailPage() {
     const [accident, setAccident] = useState<Accident | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
 
+    const formatSupabaseError = (err: any): string => {
+        try {
+            if (!err) return 'Erro desconhecido.';
+            if (typeof err === 'string') {
+                const parsed = JSON.parse(err);
+                return parsed?.message || parsed?.error || err;
+            }
+            return err.message || err.details || err.hint || err.code || String(err);
+        } catch {
+            return typeof err === 'string' ? err : 'Erro desconhecido.';
+        }
+    };
+
+    const safeFormatDate = (iso?: string) => {
+        try {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return '—';
+            return format(d, 'dd/MM/yyyy HH:mm', { locale: pt });
+        } catch {
+            return '—';
+        }
+    };
+
     useEffect(() => {
         const supabase = getSupabaseClient();
         const fetchAccident = async () => {
@@ -73,9 +97,20 @@ export default function AccidentDetailPage() {
                 .maybeSingle();
             if (error) {
                 console.error('Erro ao carregar acidente do Supabase', error);
+                toast({ title: 'Erro ao carregar acidente', description: formatSupabaseError(error), variant: 'destructive' });
                 setAccident(null);
             } else {
-                setAccident(data as Accident);
+                const normalized: Accident = {
+                    id: String((data as any)?.id),
+                    datetime: (data as any)?.datetime ?? '',
+                    workerName: (data as any)?.worker_name ?? '',
+                    clientUnit: (data as any)?.client_unit ?? '',
+                    type: (data as any)?.type ?? 'sem-baixa',
+                    severity: (data as any)?.severity ?? 'leve',
+                    description: (data as any)?.description ?? '',
+                    probableCause: (data as any)?.probable_cause ?? '',
+                };
+                setAccident(normalized);
             }
             setLoading(false);
         };
@@ -97,7 +132,7 @@ export default function AccidentDetailPage() {
     const downloadXLSX = () => {
         const dataToExport = [
             { Chave: 'ID do Relatório', Valor: accident.id },
-            { Chave: 'Data e Hora', Valor: format(new Date(accident.datetime), "dd/MM/yyyy HH:mm", { locale: pt }) },
+            { Chave: 'Data e Hora', Valor: safeFormatDate(accident.datetime) },
             { Chave: 'Trabalhador Envolvido', Valor: accident.workerName },
             { Chave: 'Unidade / Cliente', Valor: accident.clientUnit },
             { Chave: 'Tipo de Incidente', Valor: getAccidentType(accident.type) },
@@ -143,7 +178,7 @@ export default function AccidentDetailPage() {
                 </CardHeader>
                 <CardContent className="space-y-8">
                      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
-                        <DetailItem icon={Calendar} label="Data e Hora" value={format(accident.datetime.seconds * 1000, "dd/MM/yyyy HH:mm", { locale: pt })} />
+                        <DetailItem icon={Calendar} label="Data e Hora" value={safeFormatDate(accident.datetime)} />
                         <DetailItem icon={User} label="Trabalhador Envolvido" value={accident.workerName} />
                         <DetailItem icon={Siren} label="Unidade / Cliente" value={accident.clientUnit} />
                         <DetailItem icon={AlertTriangle} label="Tipo de Incidente" value={getAccidentType(accident.type)} />

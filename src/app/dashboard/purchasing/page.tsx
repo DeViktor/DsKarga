@@ -88,7 +88,7 @@ export default function PurchasingPage() {
       // Inline fallback: inserir solicitação diretamente no Supabase
       const supabase = getSupabaseClient();
       const requestNumber = `PR-${Date.now()}`;
-      const payload = {
+      const basePayload = {
         request_number: requestNumber,
         requester: data.requester ?? 'Admin',
         department: data.department ?? '',
@@ -97,10 +97,47 @@ export default function PurchasingPage() {
         status: 'Pendente',
         created_at: new Date().toISOString(),
       };
-      const { error } = await supabase
+      const { data: inserted, error: insertError } = await supabase
         .from('purchase_requests')
-        .insert(payload);
-      if (error) throw new Error(error.message || 'Falha ao criar solicitação de compra');
+        .insert(basePayload)
+        .select('id')
+        .single();
+      if (insertError) throw new Error(insertError.message || 'Falha ao criar solicitação de compra');
+
+      // Inserir itens na tabela relacional (nome preferido: purchase_request_items; fallback: purchase_requests_items)
+      const itemsPayload = (data.items || []).map((item: any) => ({
+        request_id: inserted?.id,
+        // Se o schema exigir item_id (FK), usa item.id se fornecido pelo formulário
+        item_id: item.id ?? item.itemId ?? undefined,
+        description: item.description,
+        quantity: Number(item.quantity),
+        unit: item.unit,
+        created_at: new Date().toISOString(),
+      }));
+
+      if (itemsPayload.length > 0) {
+        const { error: itemsError } = await supabase
+          .from('purchase_request_items')
+          .insert(itemsPayload);
+        if (itemsError) {
+          const msg = itemsError.message?.toLowerCase() || '';
+          const relationMissing = msg.includes('relation') && msg.includes('does not exist');
+          if (relationMissing) {
+            // Tentar com nome alternativo
+            const retry = await supabase
+              .from('purchase_requests_items')
+              .insert(itemsPayload);
+            if (retry.error) {
+              throw new Error(retry.error.message || 'Falha ao criar itens da solicitação de compra');
+            }
+          } else if (msg.includes('null value in column "item_id"')) {
+            // Mensagem clara quando o schema exige item_id (NOT NULL)
+            throw new Error('Falha ao criar itens: o schema exige item_id (NOT NULL). Selecione itens de catálogo com id ou ajuste o schema para permitir null/default em item_id.');
+          } else {
+            throw new Error(itemsError.message || 'Falha ao criar itens da solicitação de compra');
+          }
+        }
+      }
       toast({
         title: "Sucesso!",
         description: "A sua solicitação de compra foi enviada para aprovação.",

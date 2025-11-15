@@ -38,6 +38,7 @@ import { Loader2, Truck, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { useEpiItems, type EpiItem } from '@/hooks/use-epis';
 import { type EpiDelivery } from '@/app/dashboard/epi/deliveries/page';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 interface EpiDeliveryDialogProps {
   open: boolean;
@@ -98,7 +99,7 @@ export function EpiDeliveryDialog({ open, onOpenChange, workers, epis, onDeliver
     }
 
     const newQuantity = selectedEpi.quantity - data.quantity;
-    updateEpi(selectedEpi.id, { ...selectedEpi, quantity: newQuantity });
+    await updateEpi(selectedEpi.id, { ...selectedEpi, quantity: newQuantity });
     
     const deliveryRecord: EpiDelivery = {
       id: `delivery-${Date.now()}`,
@@ -109,6 +110,25 @@ export function EpiDeliveryDialog({ open, onOpenChange, workers, epis, onDeliver
       responsible: 'Admin'
     };
     
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('epi_deliveries')
+        .insert({
+          worker_id: deliveryRecord.workerId,
+          worker_name: deliveryRecord.workerName,
+          epi_id: deliveryRecord.epiId,
+          epi_name: deliveryRecord.epiName,
+          quantity: deliveryRecord.quantity,
+          date: deliveryRecord.date.toISOString(),
+          responsible: deliveryRecord.responsible,
+          created_at: new Date().toISOString(),
+        });
+      if (error) throw error;
+    } catch (err) {
+      console.error('Erro ao gravar entrega de EPI no Supabase', err);
+    }
+
     onDeliverySuccess(deliveryRecord);
 
     toast({

@@ -27,6 +27,7 @@ import { useClients } from "@/hooks/use-clients";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface Accident {
     id: string;
@@ -44,6 +45,20 @@ export default function AccidentsPage() {
   const { clients, loading: clientsLoading } = useClients();
   const [accidents, setAccidents] = useState<Accident[]>([]);
   const [loadingAccidents, setLoadingAccidents] = useState<boolean>(true);
+  const { toast } = useToast();
+
+  const formatSupabaseError = (err: any): string => {
+    try {
+      if (!err) return 'Erro desconhecido.';
+      if (typeof err === 'string') {
+        const parsed = JSON.parse(err);
+        return parsed?.message || parsed?.error || err;
+      }
+      return err.message || err.details || err.hint || err.code || String(err);
+    } catch {
+      return typeof err === 'string' ? err : 'Erro desconhecido.';
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -67,9 +82,11 @@ export default function AccidentsPage() {
           probableCause: a.probable_cause,
         })) as Accident[];
         if (isMounted) setAccidents(normalized);
-      } catch (err) {
+      } catch (err: any) {
+        const message = formatSupabaseError(err);
         console.error('Erro ao carregar acidentes do Supabase', err);
         if (isMounted) setAccidents([]);
+        toast({ title: 'Erro ao carregar acidentes', description: message, variant: 'destructive' });
       } finally {
         if (isMounted) setLoadingAccidents(false);
       }

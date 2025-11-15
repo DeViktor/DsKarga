@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { type AnalyzedCandidate } from './candidate-analysis';
+import { type Candidate as DbCandidate } from '@/hooks/use-candidates';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
 import { User, Mail, Phone, Briefcase, Star, GraduationCap, Languages, Award, Building, Calendar } from 'lucide-react';
@@ -18,7 +19,7 @@ import { User, Mail, Phone, Briefcase, Star, GraduationCap, Languages, Award, Bu
 interface CandidateDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  candidate: AnalyzedCandidate | null;
+  candidate: (AnalyzedCandidate | DbCandidate) | null;
 }
 
 const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string | number | null }) => {

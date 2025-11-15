@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import {
   Card,
@@ -23,13 +23,47 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { CandidateAnalysis, type AnalyzedCandidate } from '@/components/dashboard/candidate-analysis';
 import { CandidateDetailDialog } from '@/components/dashboard/candidate-detail-dialog';
+import { useCandidates } from '@/hooks/use-candidates';
+import { useToast } from '@/hooks/use-toast';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { Loader2 } from 'lucide-react';
 
 export default function CandidatesPage() {
-  const [candidates, setCandidates] = useState<AnalyzedCandidate[]>([]);
+  const { candidates, loading } = useCandidates();
+  const { toast } = useToast();
   const [selectedCandidate, setSelectedCandidate] = useState<AnalyzedCandidate | null>(null);
 
-  const handleAddCandidate = (candidate: AnalyzedCandidate) => {
-    setCandidates((prev) => [...prev, candidate]);
+  const handleAddCandidate = async (candidate: AnalyzedCandidate) => {
+    try {
+      const supabase = getSupabaseClient();
+      const payload = {
+        name: candidate.name,
+        role: candidate.role,
+        email: candidate.email,
+        phone_number: candidate.phoneNumber,
+        seniority: candidate.seniority,
+        gender: candidate.gender,
+        age: candidate.age,
+        area_of_specialization: candidate.areaOfSpecialization,
+        years_of_experience: candidate.yearsOfExperience,
+        course: candidate.course,
+        skills: candidate.skills,
+        qualifications: candidate.qualifications,
+        languages: candidate.languages,
+        previous_companies: candidate.previousCompanies,
+        certifications: candidate.certifications,
+        experience_summary: candidate.experienceSummary,
+        status: 'Pendente',
+        created_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from('candidates').insert(payload);
+      if (error) throw error;
+      toast({ title: 'Candidato guardado', description: 'O candidato foi guardado no Supabase.' });
+    } catch (err: any) {
+      const message = (typeof err?.message === 'string' ? err.message : 'Falha ao guardar candidato no Supabase');
+      console.error('Erro ao guardar candidato', err);
+      toast({ title: 'Erro ao guardar', description: message, variant: 'destructive' });
+    }
   };
 
   return (
@@ -56,6 +90,11 @@ export default function CandidatesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -67,7 +106,7 @@ export default function CandidatesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {candidates.length === 0 ? (
+              {(!candidates || candidates.length === 0) ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-16 text-muted-foreground">
                     <p>Nenhum candidato na base de dados.</p>
@@ -75,12 +114,12 @@ export default function CandidatesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                candidates.map((candidate, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium">{candidate.name}</TableCell>
-                    <TableCell>{candidate.role}</TableCell>
-                    <TableCell>{candidate.areaOfSpecialization}</TableCell>
-                    <TableCell>{candidate.yearsOfExperience}</TableCell>
+                candidates.map((candidate) => (
+                  <TableRow key={candidate.id}>
+                    <TableCell className="font-medium">{candidate.name || '—'}</TableCell>
+                    <TableCell>{candidate.role || '—'}</TableCell>
+                    <TableCell>{candidate.areaOfSpecialization || '—'}</TableCell>
+                    <TableCell>{candidate.yearsOfExperience ?? '—'}</TableCell>
                     <TableCell className="text-right">
                         <Button variant="outline" size="sm" onClick={() => setSelectedCandidate(candidate)}>
                             Ver Detalhes
@@ -91,6 +130,7 @@ export default function CandidatesPage() {
               )}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
 

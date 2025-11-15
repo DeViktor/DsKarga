@@ -27,6 +27,7 @@ import { AttendanceSheetPrintLayout } from '@/components/dashboard/attendance-sh
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { useServices } from '@/hooks/use-services';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 interface AttendanceRecord {
     entry: string;
@@ -82,6 +83,33 @@ export default function AttendancePage() {
       }
     }, [isPrinting]);
 
+    useEffect(() => {
+      let isMounted = true;
+      async function fetchSavedSheets() {
+        try {
+          const supabase = getSupabaseClient();
+          const { data, error } = await supabase
+            .from('attendance_sheets')
+            .select('*')
+            .order('date', { ascending: false });
+          if (error) throw error;
+          const normalized = (data || []).map((s: any) => ({
+            id: String(s.id ?? s.uuid),
+            date: s.date ? new Date(s.date) : new Date(),
+            responsible: s.responsible ?? 'Admin',
+            clientName: s.client_name ?? 'N/A',
+            attendanceData: s.attendance_data ?? {},
+          })) as SavedSheet[];
+          if (isMounted) setSavedSheets(normalized);
+        } catch (err) {
+          console.error('Erro ao carregar folhas de assiduidade do Supabase', err);
+          if (isMounted) setSavedSheets([]);
+        }
+      }
+      fetchSavedSheets();
+      return () => { isMounted = false; };
+    }, []);
+
     const handleTimeChange = (workerId: string, type: keyof AttendanceRecord, value: string) => {
         setAttendance(prev => ({
             ...prev,
@@ -92,7 +120,7 @@ export default function AttendancePage() {
         }));
     };
     
-    const handleSave = () => {
+    const handleSave = async () => {
         // Find a client name from the assigned workers for context
         const assignedWorker = workers.find(w => w.assignedToService);
         let clientName = 'N/A';
@@ -110,11 +138,40 @@ export default function AttendancePage() {
             clientName: clientName,
             attendanceData: { ...attendance },
         };
-        setSavedSheets(prev => [newSheet, ...prev]);
-        toast({
-            title: "Registos Salvos",
-            description: "A folha de ponto do dia foi guardada com sucesso.",
-        });
+        try {
+          const supabase = getSupabaseClient();
+          const { data, error } = await supabase
+            .from('attendance_sheets')
+            .insert({
+              date: newSheet.date.toISOString(),
+              responsible: newSheet.responsible,
+              client_name: newSheet.clientName,
+              attendance_data: newSheet.attendanceData,
+              created_at: new Date().toISOString(),
+            })
+            .select()
+            .single();
+          if (error) throw error;
+          const inserted: SavedSheet = {
+            id: String(data.id ?? newSheet.id),
+            date: data.date ? new Date(data.date) : newSheet.date,
+            responsible: data.responsible ?? newSheet.responsible,
+            clientName: data.client_name ?? newSheet.clientName,
+            attendanceData: data.attendance_data ?? newSheet.attendanceData,
+          };
+          setSavedSheets(prev => [inserted, ...prev]);
+          toast({
+              title: "Registos Salvos",
+              description: "A folha de ponto do dia foi guardada com sucesso.",
+          });
+        } catch (err) {
+          console.error('Erro ao salvar folha de assiduidade no Supabase', err);
+          toast({
+            title: "Erro ao salvar",
+            description: "Não foi possível gravar no Supabase.",
+            variant: "destructive",
+          });
+        }
     };
 
     const handlePrintCurrent = () => {

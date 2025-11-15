@@ -33,8 +33,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2, PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore } from '@/firebase';
-import { addAccidentReport } from '@/firebase/firestore/accidents';
+import { addAccidentReportSupabase } from '@/lib/supabase/actions';
 import { workers } from '@/lib/data';
 import { type Client } from '@/app/dashboard/clients/page';
 
@@ -62,7 +61,19 @@ interface AccidentReportDialogProps {
 
 export function AccidentReportDialog({ clients }: AccidentReportDialogProps) {
   const { toast } = useToast();
-  const firestore = useFirestore();
+
+  const formatSupabaseError = (err: any): string => {
+    try {
+      if (!err) return 'Erro desconhecido.';
+      if (typeof err === 'string') {
+        const parsed = JSON.parse(err);
+        return parsed?.message || parsed?.error || err;
+      }
+      return err.message || err.details || err.hint || err.code || String(err);
+    } catch {
+      return typeof err === 'string' ? err : 'Erro desconhecido.';
+    }
+  };
 
   const form = useForm<AccidentFormValues>({
     resolver: zodResolver(accidentSchema),
@@ -76,25 +87,14 @@ export function AccidentReportDialog({ clients }: AccidentReportDialogProps) {
   });
 
   const onSubmit = async (data: AccidentFormValues) => {
-    if (!firestore) return;
-
     try {
-        await addAccidentReport(firestore, data);
-        toast({
-            title: 'Sucesso!',
-            description: 'O registo de acidente foi guardado.',
-        });
-        form.reset();
-        // Here you might want to somehow close the dialog.
-        // A common pattern is to control the open state from the parent.
-        // For now, we'll just reset the form.
-    } catch (error) {
-        console.error("Failed to save accident report: ", error);
-        toast({
-            title: 'Erro!',
-            description: 'Não foi possível guardar o registo. Tente novamente.',
-            variant: 'destructive'
-        });
+      await addAccidentReportSupabase(data);
+      toast({ title: 'Sucesso!', description: 'O registo de acidente foi guardado no Supabase.' });
+      form.reset();
+    } catch (error: any) {
+      const message = formatSupabaseError(error);
+      console.error('Falha ao salvar registo de acidente (Supabase):', error);
+      toast({ title: 'Erro ao salvar', description: message, variant: 'destructive' });
     }
   }
 

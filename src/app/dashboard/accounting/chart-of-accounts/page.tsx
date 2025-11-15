@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
   Card,
@@ -22,8 +22,8 @@ import {
 import { Search, PlusCircle, MoreHorizontal, Loader2, Trash2, Edit } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+// Supabase integration replaces Firebase for listing PGC accounts
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { AccountDialog } from '@/components/dashboard/accounting/account-dialog';
 import {
   DropdownMenu,
@@ -41,9 +41,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { deleteAccount } from '@/firebase/firestore/accounts';
 import { useToast } from '@/hooks/use-toast';
 import { pgcAccounts as staticAccounts } from '@/lib/pgc-data';
+ 
 
 export interface PGCAccount {
   id: string;
@@ -60,21 +60,64 @@ export default function ChartOfAccountsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<PGCAccount | null>(null);
   const [accountToDelete, setAccountToDelete] = useState<PGCAccount | null>(null);
-  
-  const firestore = useFirestore();
+  const [supabaseAccounts, setSupabaseAccounts] = useState<PGCAccount[] | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const { toast } = useToast();
+  
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAccounts() {
+      try {
+        setLoading(true);
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from('pgc_accounts')
+          .select('*')
+          .order('code', { ascending: true });
 
-  const customAccountsQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'chart-of-accounts'), orderBy('code'));
-  }, [firestore]);
+        if (error) {
+          toast({
+            title: 'Erro ao carregar PGC',
+            description: error.message,
+            variant: 'destructive',
+          });
+          if (isMounted) setSupabaseAccounts(null);
+        } else if (data && isMounted) {
+          const normalized: PGCAccount[] = (data as any[]).map((acc) => ({
+            id: acc.id ?? acc.code,
+            code: acc.code ?? acc.account_code ?? '',
+            name: acc.name ?? acc.account_name ?? '',
+            class: acc.class ?? acc.account_class ?? '',
+            isCustom: false,
+          })).filter(a => a.code && a.name && a.class);
 
-  const { data: customAccounts, loading } = useCollection<PGCAccount>(customAccountsQuery);
+          if (normalized.length === 0) {
+            toast({
+              title: 'Sem contas no Supabase',
+              description: 'A tabela pgc_accounts está vazia. A mostrar dados estáticos do PGC.',
+            });
+          }
+          setSupabaseAccounts(normalized);
+        }
+      } catch (e: any) {
+        toast({
+          title: 'Erro inesperado',
+          description: e?.message ?? 'Falha ao carregar contas do Supabase.',
+          variant: 'destructive',
+        });
+        if (isMounted) setSupabaseAccounts(null);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    fetchAccounts();
+    return () => { isMounted = false; };
+  }, []);
 
   const allAccounts = useMemo(() => {
-    const firestoreAccounts = customAccounts ? customAccounts.map(acc => ({ ...acc, isCustom: true })) : [];
-    return [...staticAccounts, ...firestoreAccounts].sort((a, b) => a.code.localeCompare(b.code));
-  }, [customAccounts]);
+    const source = supabaseAccounts && supabaseAccounts.length > 0 ? supabaseAccounts : staticAccounts;
+    return [...source].sort((a, b) => a.code.localeCompare(b.code));
+  }, [supabaseAccounts]);
 
 
   const filteredAccounts = useMemo(() => {
@@ -121,23 +164,13 @@ export default function ChartOfAccountsPage() {
   };
   
   const confirmDelete = async () => {
-    if (!firestore || !accountToDelete) return;
-    try {
-        await deleteAccount(firestore, accountToDelete.id);
-        toast({
-            title: "Conta Eliminada",
-            description: "A conta foi removida com sucesso.",
-        });
-    } catch (error) {
-        toast({
-            title: "Erro",
-            description: "Não foi possível eliminar a conta.",
-            variant: "destructive",
-        });
-    } finally {
-        setDeleteDialogOpen(false);
-        setAccountToDelete(null);
-    }
+    if (!accountToDelete) return;
+    toast({
+      title: 'Operação não disponível',
+      description: 'A eliminação está apenas disponível para contas personalizadas.',
+    });
+    setDeleteDialogOpen(false);
+    setAccountToDelete(null);
   }
 
 

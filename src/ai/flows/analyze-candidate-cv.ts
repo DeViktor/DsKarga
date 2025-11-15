@@ -1,4 +1,4 @@
-'use server';
+// Removed 'use server' because this file exports non-async values (schemas/objects).
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';

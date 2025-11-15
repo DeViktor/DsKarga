@@ -1,5 +1,5 @@
 
-'use client';
+"use client";
 
 import { useMemo, useState } from 'react';
 import { useParams, useRouter, notFound } from 'next/navigation';
@@ -75,7 +75,6 @@ export default function PurchaseOrderDetailPage() {
              toast({ title: "Erro", description: "Não foi possível associar o fornecedor.", variant: "destructive"});
         }
     };
-
 
     if (orderLoading || suppliersLoading) {
         return <div className="flex justify-center items-center h-full"><Loader2 className="h-16 w-16 animate-spin"/></div>

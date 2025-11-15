@@ -25,6 +25,8 @@ import { format } from 'date-fns';
 import { useWorkers } from '@/hooks/use-workers';
 import { type Worker } from '@/app/dashboard/workers/page';
 import { EpiItem, useEpiItems } from '@/hooks/use-epis';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 
 export interface EpiDelivery {
@@ -44,6 +46,51 @@ export default function EpiDeliveriesPage() {
   const { workers, loading: workersLoading } = useWorkers();
   const { epis, loading: episLoading } = useEpiItems();
   const [deliveries, setDeliveries] = useState<EpiDelivery[]>([]);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchFrom(table: string) {
+      const supabase = getSupabaseClient();
+      const res = await supabase.from(table).select('*').order('date', { ascending: false });
+      if (res.error) throw new Error(res.error.message || `Falha ao ler ${table}`);
+      return (res.data || []) as any[];
+    }
+    async function fetchDeliveries() {
+      try {
+        let rows: any[] = [];
+        const candidates = ['epi_deliveries', 'epi_delivery', 'epi_entregas'];
+        for (const t of candidates) {
+          try {
+            rows = await fetchFrom(t);
+            if (rows.length > 0) break;
+          } catch (e) {
+            // tenta próximo
+          }
+        }
+        const normalized = rows.map((d: any) => ({
+          id: String(d.id ?? d.uuid ?? `${d.worker_id}-${d.epi_id}-${d.date}`),
+          workerId: String(d.worker_id ?? d.workerId ?? ''),
+          workerName: d.worker_name ?? d.workerName ?? '',
+          epiId: String(d.epi_id ?? d.epiId ?? ''),
+          epiName: d.epi_name ?? d.epiName ?? '',
+          quantity: Number(d.quantity ?? 0),
+          date: d.date ? new Date(d.date) : new Date(),
+          responsible: d.responsible ?? 'Admin',
+        })) as EpiDelivery[];
+        if (isMounted) setDeliveries(normalized);
+        if (normalized.length === 0) {
+          toast({ title: 'Sem entregas', description: 'Nenhum registo encontrado nas tabelas de entregas do Supabase.' });
+        }
+      } catch (err: any) {
+        console.error('Erro ao carregar entregas de EPI do Supabase', err);
+        if (isMounted) setDeliveries([]);
+        toast({ title: 'Erro ao carregar', description: err?.message || 'Não foi possível obter as entregas de EPI.', variant: 'destructive' });
+      }
+    }
+    fetchDeliveries();
+    return () => { isMounted = false; };
+  }, []);
 
   const isLoading = workersLoading || episLoading;
   

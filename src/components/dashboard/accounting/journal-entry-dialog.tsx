@@ -51,6 +51,7 @@ import { FilePlus, CalendarIcon, Trash2, PlusCircle, Loader2 } from 'lucide-reac
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { pgcAccounts as staticAccounts } from '@/lib/pgc-data';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -120,6 +121,19 @@ export function JournalEntryDialog({ onEntryAdded }: JournalEntryDialogProps) {
     const { toast } = useToast();
     const [open, setOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const formatSupabaseError = (err: any): string => {
+        try {
+            if (!err) return 'Erro desconhecido.';
+            if (typeof err === 'string') {
+                const parsed = JSON.parse(err);
+                return parsed?.message || parsed?.error || err;
+            }
+            return err.message || err.details || err.hint || err.code || String(err);
+        } catch {
+            return typeof err === 'string' ? err : 'Erro desconhecido.';
+        }
+    };
     
     const form = useForm<JournalEntryFormValues>({
         resolver: zodResolver(journalEntrySchema),
@@ -184,24 +198,80 @@ export function JournalEntryDialog({ onEntryAdded }: JournalEntryDialogProps) {
 
     const isBalanced = useMemo(() => totals.debit > 0 && Math.abs(totals.debit - totals.credit) < 0.001, [totals]);
 
-    const onSubmit = (data: JournalEntryFormValues) => {
+    const onSubmit = async (data: JournalEntryFormValues) => {
         setIsSubmitting(true);
-        onEntryAdded(data);
-        toast({
-            title: 'Lançamento Adicionado!',
-            description: 'O seu lançamento foi registado localmente com sucesso.',
-        });
-        form.reset({
-             date: new Date(),
-             description: '',
-             documentRef: '',
-             lines: [
-                 { accountId: '', accountName: '', debit: 0, credit: 0 },
-                 { accountId: '', accountName: '', debit: 0, credit: 0 },
-             ],
-        });
-        setIsSubmitting(false);
-        setOpen(false);
+        try {
+            const supabase = getSupabaseClient();
+            // Primeiro, inserir o cabeçalho do lançamento (sem coluna 'lines')
+            const payloadEntry: any = {
+                entry_date: data.date.toISOString(),
+                document_ref: data.documentRef ?? null,
+                description: data.description,
+                created_at: new Date().toISOString(),
+            };
+            const { data: inserted, error: insertEntryError } = await supabase
+                .from('journal_entries')
+                .insert(payloadEntry)
+                .select('id')
+                .single();
+            if (insertEntryError) {
+                throw new Error(formatSupabaseError(insertEntryError));
+            }
+
+            const entryId = inserted?.id;
+            if (!entryId) {
+                throw new Error('Inserção realizada, mas não foi possível obter o ID do lançamento.');
+            }
+
+            // Em seguida, inserir as linhas na tabela dedicada correta
+            const lineRows = data.lines.map(l => ({
+                entry_id: entryId,
+                account_id: l.accountId,
+                account_name: l.accountName,
+                debit: l.debit,
+                credit: l.credit,
+                created_at: new Date().toISOString(),
+            }));
+            let { error: lineError } = await supabase
+                .from('journal_entries_lines')
+                .insert(lineRows);
+            // Fallback: se coluna entry_id não existir, tentar journal_entry_id
+            if (lineError && /column .*entry_id.* does not exist/i.test(lineError.message || '')) {
+                const altRows = data.lines.map(l => ({
+                    journal_entry_id: entryId,
+                    account_id: l.accountId,
+                    account_name: l.accountName,
+                    debit: l.debit,
+                    credit: l.credit,
+                    created_at: new Date().toISOString(),
+                }));
+                const altRes = await supabase
+                    .from('journal_entries_lines')
+                    .insert(altRows);
+                lineError = altRes.error;
+            }
+            if (lineError) {
+                throw new Error(formatSupabaseError(lineError));
+            }
+            onEntryAdded(data);
+            toast({ title: 'Lançamento Adicionado!', description: 'O seu lançamento foi gravado no Supabase.' });
+            form.reset({
+                 date: new Date(),
+                 description: '',
+                 documentRef: '',
+                 lines: [
+                     { accountId: '', accountName: '', debit: 0, credit: 0 },
+                     { accountId: '', accountName: '', debit: 0, credit: 0 },
+                 ],
+            });
+            setOpen(false);
+        } catch (err: any) {
+            const message = formatSupabaseError(err);
+            console.error('Erro ao salvar lançamento no Supabase:', err);
+            toast({ title: 'Erro ao salvar', description: message, variant: 'destructive' });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleAccountSelect = (lineIndex: number, accountCode: string, callback: () => void) => {

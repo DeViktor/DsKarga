@@ -41,6 +41,8 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { type Client } from '@/app/dashboard/clients/page';
 import { useClients } from '@/hooks/use-clients';
+import { useToast } from '@/hooks/use-toast';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 interface InvoiceItem {
     id: number;
@@ -52,6 +54,7 @@ interface InvoiceItem {
 
 export default function BillingPage() {
     const { clients, loading: clientsLoading } = useClients();
+    const { toast } = useToast();
 
     const [docType, setDocType] = useState('Fatura');
     const [invoiceNumber, setInvoiceNumber] = useState(`FT ${new Date().getFullYear()}/${Math.floor(Math.random() * 1000)}`);
@@ -113,6 +116,48 @@ export default function BillingPage() {
 
     const handlePrint = () => {
       window.print();
+    }
+
+    const handleSaveInvoice = async () => {
+      if (!items.length) {
+        toast({ title: 'Sem itens', description: 'Adicione itens à fatura antes de salvar.', variant: 'destructive' });
+        return;
+      }
+      try {
+        const supabase = getSupabaseClient();
+        const payload: any = {
+          document_type: docType,
+          invoice_number: invoiceNumber,
+          client_id: selectedClientId,
+          client_name: clientDetails.name ?? null,
+          client_nif: clientDetails.nif ?? null,
+          client_address: clientDetails.address ?? null,
+          client_province: clientDetails.province ?? null,
+          issue_date: issueDate ? new Date(issueDate).toISOString() : new Date().toISOString(),
+          due_date: dueDate ? new Date(dueDate).toISOString() : null,
+          observations,
+          iva_rate: ivaRate,
+          apply_retention: applyRetention,
+          items: items.map(i => ({ id: i.id, description: i.description, quantity: i.quantity, price: i.price, discount: i.discount })),
+          subtotal: totals.totalIliquido,
+          tax_amount: totals.imposto,
+          retention_amount: totals.retencao,
+          total_amount: totals.total,
+          status: 'Emitida',
+          created_at: new Date().toISOString(),
+        };
+        Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+        const { data, error } = await supabase
+          .from('invoices')
+          .insert(payload)
+          .select('id, invoice_number')
+          .single();
+        if (error) throw error;
+        toast({ title: 'Fatura salva', description: `Documento ${data?.invoice_number || invoiceNumber} gravado com sucesso.` });
+      } catch (err: any) {
+        console.error('Erro ao salvar fatura no Supabase', err);
+        toast({ title: 'Erro ao salvar', description: err?.message || 'Não foi possível gravar a fatura no Supabase.', variant: 'destructive' });
+      }
     }
 
   return (
@@ -269,7 +314,7 @@ export default function BillingPage() {
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" size="icon" onClick={handlePrint} disabled={items.length === 0}><Printer className="h-4 w-4"/></Button>
-                        <Button variant="outline" size="icon" onClick={handlePrint} disabled={items.length === 0}><FileDown className="h-4 w-4"/></Button>
+                        <Button variant="outline" size="icon" onClick={handleSaveInvoice} disabled={items.length === 0}><FileDown className="h-4 w-4"/></Button>
                     </div>
                 </CardHeader>
                 <CardContent className="p-8 border-t bg-white text-black dark:bg-gray-950 dark:text-white print:p-0 print:border-none">

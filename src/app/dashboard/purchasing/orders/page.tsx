@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
   Card,
@@ -22,12 +22,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Loader2 } from "lucide-react";
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
 import { format } from 'date-fns';
-import { updatePurchaseOrderStatus, type PurchaseOrder } from '@/firebase/firestore/purchasing';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 const getStatusVariant = (status: string) => {
     switch (status) {
@@ -39,24 +37,63 @@ const getStatusVariant = (status: string) => {
     }
 };
 
+type UiOrder = {
+  id: string;
+  orderNumber: string;
+  requestNumber?: string;
+  supplierName?: string | null;
+  issueDate?: string | null;
+  createdAt?: string | null;
+  status: string;
+  itemsCount?: number;
+};
+
 export default function PurchaseOrdersPage() {
-  const firestore = useFirestore();
   const { toast } = useToast();
-  
-  const ordersQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'purchase-orders'), orderBy('createdAt', 'desc'));
-  }, [firestore]);
+  const supabase = getSupabaseClient();
+  const [purchaseOrders, setPurchaseOrders] = useState<UiOrder[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const { data: purchaseOrders, loading } = useCollection<PurchaseOrder>(ordersQuery);
+  useEffect(() => {
+    const fetchOrders = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('purchase_orders')
+        .select('*')
+        .order('issue_date', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (error) {
+        toast({ title: 'Erro', description: error.message || 'Falha ao carregar ordens.', variant: 'destructive' });
+        setPurchaseOrders([]);
+      } else {
+        const mapped: UiOrder[] = (data || []).map((row: any) => ({
+          id: row.id,
+          orderNumber: row.order_number,
+          requestNumber: row.request_number,
+          supplierName: row.supplier_name ?? null,
+          issueDate: row.issue_date ?? null,
+          createdAt: row.created_at ?? null,
+          status: row.status || 'Pendente',
+          itemsCount: row.items_count ?? undefined,
+        }));
+        setPurchaseOrders(mapped);
+      }
+      setLoading(false);
+    };
+    fetchOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleUpdateStatus = async (id: string, status: PurchaseOrder['status']) => {
-    if (!firestore) return;
-    try {
-      await updatePurchaseOrderStatus(firestore, id, status);
-      toast({ title: "Sucesso", description: `Ordem de compra marcada como ${status.toLowerCase()}.`});
-    } catch (e) {
-      toast({ title: "Erro", description: 'Não foi possível atualizar o estado.', variant: 'destructive'});
+  const handleUpdateStatus = async (id: string, status: UiOrder['status']) => {
+    const { error } = await supabase
+      .from('purchase_orders')
+      .update({ status })
+      .eq('id', id);
+    if (error) {
+      toast({ title: 'Erro', description: 'Não foi possível atualizar o estado.', variant: 'destructive' });
+    } else {
+      toast({ title: 'Sucesso', description: `Ordem de compra marcada como ${status.toLowerCase()}.` });
+      setPurchaseOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
     }
   };
 
@@ -91,8 +128,8 @@ export default function PurchaseOrdersPage() {
                   <TableCell className="font-mono">{order.orderNumber}</TableCell>
                   <TableCell className="font-mono">{order.requestNumber}</TableCell>
                   <TableCell className="font-medium">{order.supplierName || 'A definir'}</TableCell>
-                  <TableCell>{order.createdAt ? format(order.createdAt.toDate(), 'dd/MM/yyyy') : 'A processar...'}</TableCell>
-                  <TableCell>{order.items.length}</TableCell>
+                  <TableCell>{(order.issueDate || order.createdAt) ? format(new Date(order.issueDate || order.createdAt), 'dd/MM/yyyy') : 'A processar...'}</TableCell>
+                  <TableCell>{typeof order.itemsCount === 'number' ? order.itemsCount : '-'}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
                   </TableCell>

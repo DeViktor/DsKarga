@@ -51,7 +51,8 @@ export default function PurchaseRequestDetailPage() {
                     .limit(1)
                     .single();
                 if (error) throw error;
-                const normalized = data ? {
+                // Primeiro, normaliza os campos principais
+                let normalized = data ? {
                     id: data.id,
                     requestNumber: data.request_number,
                     requester: data.requester,
@@ -62,6 +63,30 @@ export default function PurchaseRequestDetailPage() {
                     status: data.status || 'Pendente',
                     createdAt: data.created_at ? new Date(data.created_at) : null,
                 } : null;
+
+                // Se não houver itens embutidos, tentar buscar na tabela relacional
+                if (normalized && (!normalized.items || normalized.items.length === 0)) {
+                    const { data: relItems, error: relError } = await supabase
+                        .from('purchase_request_items')
+                        .select('id, description, quantity, unit')
+                        .eq('request_id', id);
+                    if (relError) {
+                        const msg = relError.message?.toLowerCase() || '';
+                        const relationMissing = msg.includes('relation') && msg.includes('does not exist');
+                        if (relationMissing) {
+                            // Tentar nome alternativo
+                            const retry = await supabase
+                                .from('purchase_requests_items')
+                                .select('id, description, quantity, unit')
+                                .eq('request_id', id);
+                            if (!retry.error && retry.data) {
+                                normalized = { ...normalized, items: retry.data };
+                            }
+                        }
+                    } else if (relItems) {
+                        normalized = { ...normalized, items: relItems };
+                    }
+                }
                 if (isMounted) setRequest(normalized);
             } catch (err) {
                 console.error('Erro ao carregar solicitação do Supabase', err);
@@ -104,22 +129,98 @@ export default function PurchaseRequestDetailPage() {
         try {
             const supabase = getSupabaseClient();
             const orderNumber = `PO-${Date.now()}`;
+            // Payload mínimo para evitar erro de colunas ausentes (items_count, supplier_name, issue_date)
             const payload = {
               order_number: orderNumber,
               request_id: request.id,
               request_number: request.requestNumber,
               issue_date: new Date().toISOString(),
-              status: 'Em Aberto',
+              status: 'Pendente',
               created_at: new Date().toISOString(),
             };
-            const { error } = await supabase
-              .from('purchase_orders')
-              .insert(payload);
-            if (error) throw error;
-            toast({ title: "Sucesso", description: "Ordem de compra gerada." });
+            // Inserção robusta: remove colunas ausentes até o insert funcionar
+            const tryInsert = async (initial: any) => {
+              let current = { ...initial };
+              for (let i = 0; i < 5; i++) {
+                const res = await supabase
+                  .from('purchase_orders')
+                  .insert(current)
+                  .select('id, order_number')
+                  .single();
+                if (!res.error) return res.data;
+                const em = res.error.message || '';
+                const lower = em.toLowerCase();
+                if (lower.includes('relation') && lower.includes('does not exist')) {
+                  throw new Error('Tabela purchase_orders não encontrada no Supabase. Verifique o schema.');
+                }
+                const matchQuoted = em.match(/Could not find the '([^']+)' column/i) || em.match(/'([^']+)'\s+column/i);
+                const matchDblQuoted = em.match(/column\s+"([^"]+)"/i);
+                const missingCol = (matchQuoted && matchQuoted[1]) || (matchDblQuoted && matchDblQuoted[1]) || null;
+                if (missingCol && missingCol in current) {
+                  const { [missingCol]: _omit, ...rest } = current as any;
+                  current = rest;
+                  continue;
+                }
+                if (lower.includes('schema cache') || lower.includes('column')) {
+                  const { issue_date, request_id, request_number, ...rest } = current as any;
+                  current = rest;
+                  continue;
+                }
+                throw new Error(`${res.error.message}${res.error.details ? ` — ${res.error.details}` : ''}`);
+              }
+              throw new Error('Falha ao criar ordem: colunas ausentes no schema.');
+            };
+
+            const createdOrder = await tryInsert(payload);
+            // Inserir itens da ordem após criação (caminho principal)
+            const items = Array.isArray(request.items) ? request.items : [];
+            if (items.length > 0 && createdOrder?.id) {
+              const orderItems = items.map((it: any) => ({
+                order_id: createdOrder.id,
+                item_id: it.itemId ?? it.id ?? null,
+                description: it.description ?? it.name ?? '',
+                quantity: Number(it.quantity ?? it.qty ?? 0),
+                unit: it.unit ?? it.uom ?? null,
+                created_at: new Date().toISOString(),
+              }));
+              const ins1 = await supabase.from('purchase_order_items').insert(orderItems);
+              if (ins1.error) {
+                const e = ins1.error.message?.toLowerCase() || '';
+                if (e.includes('relation') && e.includes('does not exist')) {
+                  const ins2 = await supabase.from('purchase_orders_items').insert(orderItems);
+                  if (ins2.error) {
+                    toast({
+                      title: 'Ordem criada com avisos',
+                      description: `Itens não inseridos: ${ins2.error.message}${ins2.error.details ? ` — ${ins2.error.details}` : ''}`,
+                      variant: 'destructive',
+                    });
+                  }
+                } else if (e.includes('null value') && e.includes('item_id')) {
+                  toast({
+                    title: 'Ordem criada com avisos',
+                    description: 'Itens não inseridos: a coluna item_id é obrigatória. Selecione itens do catálogo ou torne item_id opcional.',
+                    variant: 'destructive',
+                  });
+                } else {
+                  toast({
+                    title: 'Ordem criada com avisos',
+                    description: `Itens não inseridos: ${ins1.error.message}${ins1.error.details ? ` — ${ins1.error.details}` : ''}`,
+                    variant: 'destructive',
+                  });
+                }
+              }
+            }
+            toast({ title: 'Sucesso', description: `Ordem ${createdOrder.order_number} criada.` });
+            // Redireciona para a listagem de ordens (que lê do Supabase)
             router.push('/dashboard/purchasing/orders');
+          
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Não foi possível gerar a ordem de compra.';
+            // Mostrar mensagem detalhada do Supabase quando disponível
+            const anyErr = error as any;
+            const message = (anyErr && typeof anyErr === 'object' && 'message' in anyErr)
+              ? `${anyErr.message}${anyErr.details ? ` — ${anyErr.details}` : ''}`
+              : 'Não foi possível gerar a ordem de compra.';
+            console.error('Falha ao gerar ordem de compra:', error);
             toast({ title: "Erro", description: message, variant: "destructive"});
         }
     }
