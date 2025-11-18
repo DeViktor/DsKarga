@@ -4,10 +4,8 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, notFound, useRouter } from 'next/navigation';
-import { useFirestore, useDoc } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { type Service } from '@/hooks/use-services';
-import { updateRequisitionStatus } from '@/firebase/firestore/requisitions';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -36,16 +34,69 @@ export default function ServiceDetailPage() {
     const { toast } = useToast();
     const id = params.id as string;
     const [isPrinting, setIsPrinting] = useState(false);
+    const [service, setService] = useState<Service | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    const firestore = useFirestore();
-    const serviceRef = useMemo(() => {
-        if (!firestore || !id) return null;
-        return doc(firestore, 'service-requisitions', id);
-    }, [firestore, id]);
-
-    const { data: service, loading } = useDoc<Service>(serviceRef);
     const { candidates } = useCandidates();
     const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+
+    useEffect(() => {
+        async function fetchService() {
+            if (!id) return;
+            
+            setLoading(true);
+            try {
+                const supabase = getSupabaseClient();
+                const { data, error } = await supabase
+                    .from('service_requisitions')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
+
+                if (error) {
+                    console.error('Error fetching service:', error);
+                    toast({
+                        title: 'Erro!',
+                        description: 'Não foi possível carregar os detalhes da requisição.',
+                        variant: 'destructive'
+                    });
+                    return;
+                }
+
+                if (data) {
+                    const normalizedService: Service = {
+                        id: data.id,
+                        guideNumber: data.guide_number ?? data.guideNumber ?? '',
+                        requestingArea: data.requesting_area ?? data.requestingArea ?? '',
+                        responsible: data.responsible ?? '',
+                        requestDate: data.request_date ? new Date(data.request_date) : new Date(),
+                        reason: data.reason ?? '',
+                        mainActivities: data.main_activities ?? data.mainActivities ?? '',
+                        estimatedTime: data.estimated_time ?? data.estimatedTime ?? '',
+                        estimatedStaff: Number(data.estimated_staff ?? data.estimatedStaff ?? 0),
+                        budget: data.budget != null ? Number(data.budget) : undefined,
+                        assignedWorkers: Array.isArray(data.assigned_workers) ? data.assigned_workers : [],
+                        status: (data.status ?? 'Pendente') as Service['status'],
+                        createdAt: data.created_at ? new Date(data.created_at) : new Date(),
+                        type: (data.type ?? 'Eventual (Requisição)') as Service['type'],
+                        client: data.client ?? '',
+                    };
+                    setService(normalizedService);
+                }
+            } catch (error) {
+                console.error('Error fetching service:', error);
+                toast({
+                    title: 'Erro!',
+                    description: 'Não foi possível carregar os detalhes da requisição.',
+                    variant: 'destructive'
+                });
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchService();
+    }, [id, toast]);
 
     useEffect(() => {
         if (isPrinting) {
@@ -61,11 +112,25 @@ export default function ServiceDetailPage() {
         }
       }, [isPrinting, service]);
 
-
     const handleUpdateStatus = async (status: 'Aprovado' | 'Rejeitado') => {
-        if (!firestore || !id) return;
+        if (!id) return;
+        
         try {
-            await updateRequisitionStatus(firestore, id, status);
+            const supabase = getSupabaseClient();
+            const { error } = await supabase
+                .from('service_requisitions')
+                .update({ status })
+                .eq('id', id);
+
+            if (error) {
+                throw error;
+            }
+
+            // Update local state
+            if (service) {
+                setService({ ...service, status });
+            }
+
             toast({
                 title: 'Estado Atualizado!',
                 description: `A requisição foi marcada como ${status.toLowerCase()}.`
@@ -97,7 +162,6 @@ export default function ServiceDetailPage() {
         }
     }
 
-
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -109,7 +173,8 @@ export default function ServiceDetailPage() {
     if (!service) {
         return notFound();
     }
-     if (isPrinting) {
+
+    if (isPrinting) {
         return <ServiceRequisitionPrintLayout service={service} />;
     }
 
@@ -121,7 +186,6 @@ export default function ServiceDetailPage() {
             default: return 'outline';
         }
     }
-
 
   return (
     <>
@@ -144,7 +208,7 @@ export default function ServiceDetailPage() {
                         <div>
                             <CardTitle className="font-headline text-2xl">Detalhes da Requisição</CardTitle>
                             <CardDescription>
-                                Emitido em {format(service.requestDate.toDate(), "dd 'de' MMMM, yyyy", { locale: pt })}
+                                Emitido em {format(service.requestDate, "dd 'de' MMMM, yyyy", { locale: pt })}
                             </CardDescription>
                         </div>
                         <Badge variant={getStatusVariant(service.status)} className="text-base px-4 py-1">{service.status}</Badge>
@@ -154,7 +218,7 @@ export default function ServiceDetailPage() {
                     <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
                         <DetailItem icon={Briefcase} label="Área Solicitante" value={service.requestingArea} />
                         <DetailItem icon={User} label="Responsável" value={service.responsible} />
-                        <DetailItem icon={Calendar} label="Data da Solicitação" value={format(service.requestDate.toDate(), "PPP", { locale: pt })} />
+                        <DetailItem icon={Calendar} label="Data da Solicitação" value={format(service.requestDate, "PPP", { locale: pt })} />
                         <DetailItem icon={Users} label="Pessoal Estimado" value={`${service.estimatedStaff} pessoas`} />
                         <DetailItem icon={Clock} label="Tempo Estimado" value={service.estimatedTime} />
                         <DetailItem icon={DollarSign} label="Orçamento" value={service.budget ? service.budget.toLocaleString('pt-AO', { style: 'currency', currency: 'AOA' }) : 'N/A'} />
