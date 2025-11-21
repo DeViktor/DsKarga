@@ -95,13 +95,11 @@ export default function PurchaseRequestsPage() {
   const handleGenerateOrder = async (request: any) => {
     try {
       const supabase = getSupabaseClient();
-      const orderNumber = `PO-${Date.now()}`;
+      const orderNumber = `OC-${new Date().getFullYear()}-${Date.now()}`;
       const payload = {
         order_number: orderNumber,
-        request_id: request.id,
         request_number: request.requestNumber,
-        issue_date: new Date().toISOString(),
-        status: 'Em Aberto',
+        status: 'Pendente',
         created_at: new Date().toISOString(),
       };
       const { error } = await supabase

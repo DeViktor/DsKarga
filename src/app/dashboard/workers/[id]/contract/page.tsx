@@ -7,8 +7,8 @@ import { notFound, useParams, useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
-
-import { workers, type Worker } from '@/lib/data';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import type { Worker } from '@/types/worker';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -35,23 +35,76 @@ export default function ContractPage() {
   const params = useParams();
   const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const worker = workers.find((w) => w.id === id);
+  
+  const [worker, setWorker] = useState<Worker | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [isPrinting, setIsPrinting] = useState(false);
 
-  const { register, control, watch } = useForm<ContractFormData>({
+  useEffect(() => {
+    async function fetchWorker() {
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from('workers')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (error) throw error;
+
+        if (data) {
+          const normalized: Worker = {
+            id: data.id,
+            name: data.name ?? '',
+            role: data.role ?? '',
+            department: data.department ?? '',
+            category: data.category ?? '',
+            baseSalary: Number(data.base_salary ?? data.baseSalary ?? 0),
+            contractStatus: (data.status ?? 'Ativo') as Worker['contractStatus'],
+            type: (data.type ?? 'Eventual') as Worker['type'],
+          };
+          setWorker(normalized);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar trabalhador do Supabase', err);
+        setWorker(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchWorker();
+  }, [id]);
+
+  const { register, control, watch, reset } = useForm<ContractFormData>({
     defaultValues: {
-      name: worker?.name || '',
+      name: '',
       nationality: 'Angolana',
       address: 'Luanda', // Placeholder
       maritalStatus: 'Solteiro(a)', // Placeholder
       birthDate: 'N/A', // Placeholder
       bi: 'N/A', // Placeholder
-      role: worker?.role || '',
-      baseSalary: worker?.baseSalary || 0,
+      role: '',
+      baseSalary: 0,
       companySignatory: 'Rodolfo Simão Mendes',
     }
   });
+
+  useEffect(() => {
+    if (worker) {
+      reset({
+        name: worker.name || '',
+        role: worker.role || '',
+        baseSalary: worker.baseSalary || 0,
+        nationality: 'Angolana',
+        address: 'Luanda',
+        maritalStatus: 'Solteiro(a)',
+        birthDate: 'N/A',
+        bi: 'N/A',
+        companySignatory: 'Rodolfo Simão Mendes',
+      });
+    }
+  }, [worker, reset]);
 
   const contractData = useWatch({ control });
 
@@ -64,6 +117,14 @@ export default function ContractPage() {
       return () => clearTimeout(timer);
     }
   }, [isPrinting]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   if (!worker) {
     notFound();

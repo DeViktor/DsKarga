@@ -29,8 +29,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Logo } from '@/components/icons';
+import { LogoutButton } from '@/components/logout-button';
 import { ReactNode, useState } from 'react';
-import { FirebaseClientProvider } from '@/firebase';
 import { cn } from '@/lib/utils';
 
 
@@ -115,66 +115,66 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <FirebaseClientProvider>
-      <SidebarProvider>
-        <Sidebar>
-          <SidebarHeader>
-            <div className="flex items-center gap-2 py-1">
-              <Logo />
-            </div>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                item.subItems ? (
-                  <Collapsible key={item.id} open={openMenus[item.id]} onOpenChange={() => toggleMenu(item.id)}>
-                    <SidebarMenuItem>
-                        <CollapsibleTrigger asChild>
-                            <SidebarMenuButton
-                                className="w-full justify-between"
-                                isActive={pathname.startsWith(`/dashboard/${item.id}`) || (item.id === 'accounting' && pathname.startsWith('/dashboard/financial-statements'))}
-                                tooltip={item.label}
-                                >
-                                <div className='flex items-center gap-2'>
-                                  <item.icon />
-                                  <span>{item.label}</span>
-                                </div>
-                            </SidebarMenuButton>
-                       </CollapsibleTrigger>
-                    </SidebarMenuItem>
-                    <CollapsibleContent>
-                       <SidebarMenuSub>
-                          {item.subItems.map(subItem => (
-                            <SidebarMenuSubItem key={subItem.href}>
-                                <Link href={subItem.href}>
-                                    <SidebarMenuSubButton isActive={pathname === subItem.href}>
-                                        <subItem.icon />
-                                        <span>{subItem.label}</span>
-                                    </SidebarMenuSubButton>
-                                </Link>
-                            </SidebarMenuSubItem>
-                          ))}
-                       </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </Collapsible>
-                ) : (
-                  <SidebarMenuItem key={item.href}>
-                     <SidebarMenuButton
-                        asChild
-                        isActive={pathname === item.href}
-                        tooltip={item.label}
-                      >
-                        <Link href={item.href!}>
-                          <item.icon />
-                          <span>{item.label}</span>
-                        </Link>
-                      </SidebarMenuButton>
+    <SidebarProvider>
+      <Sidebar>
+        <SidebarHeader>
+          <div className="flex items-center gap-2 py-1">
+            <Logo />
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarMenu>
+            {navItems.map((item) => (
+              item.subItems ? (
+                <Collapsible key={item.id} open={openMenus[item.id]} onOpenChange={() => toggleMenu(item.id)}>
+                  <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                              className="w-full justify-between"
+                              isActive={pathname.startsWith(`/dashboard/${item.id}`) || (item.id === 'accounting' && pathname.startsWith('/dashboard/financial-statements'))}
+                              tooltip={item.label}
+                              >
+                              <div className='flex items-center gap-2'>
+                                <item.icon />
+                                <span>{item.label}</span>
+                              </div>
+                          </SidebarMenuButton>
+                     </CollapsibleTrigger>
                   </SidebarMenuItem>
-                )
-              ))}
-            </SidebarMenu>
-          </SidebarContent>
-          <SidebarFooter>
+                  <CollapsibleContent>
+                     <SidebarMenuSub>
+                        {item.subItems.map(subItem => (
+                          <SidebarMenuSubItem key={subItem.href}>
+                              <Link href={subItem.href}>
+                                  <SidebarMenuSubButton isActive={pathname === subItem.href}>
+                                      <subItem.icon />
+                                      <span>{subItem.label}</span>
+                                  </SidebarMenuSubButton>
+                              </Link>
+                          </SidebarMenuSubItem>
+                        ))}
+                     </SidebarMenuSub>
+                  </CollapsibleContent>
+                </Collapsible>
+              ) : (
+                <SidebarMenuItem key={item.href}>
+                   <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.href}
+                      tooltip={item.label}
+                    >
+                      <Link href={item.href!}>
+                        <item.icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+              )
+            ))}
+          </SidebarMenu>
+        </SidebarContent>
+        <SidebarFooter>
+          <div className="space-y-2">
             <div className="flex items-center gap-3 p-2 rounded-md bg-muted/50">
               <Avatar className="h-9 w-9">
                 <AvatarImage src="https://picsum.photos/seed/1/100/100" alt="Admin User" />
@@ -185,12 +185,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <span className="text-xs text-muted-foreground">admin@dskarga.com</span>
               </div>
             </div>
-          </SidebarFooter>
-        </Sidebar>
-        <div className="p-4 sm:p-6 lg:p-8">
-              {children}
+            <LogoutButton />
           </div>
-      </SidebarProvider>
-    </FirebaseClientProvider>
+        </SidebarFooter>
+      </Sidebar>
+      <div className="p-4 sm:p-6 lg:p-8">
+            {children}
+        </div>
+    </SidebarProvider>
   );
 }

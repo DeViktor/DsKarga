@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { identifyTransactionType, getTransactionTypeDescription } from '@/lib/accounting-transaction-types';
 
 interface JournalEntryLine {
     accountId: string;
@@ -38,6 +39,9 @@ interface JournalEntry {
     description: string;
     documentRef?: string;
     lines: JournalEntryLine[];
+    transactionType?: ReturnType<typeof identifyTransactionType>;
+    totalDebit: number;
+    totalCredit: number;
 }
 
 const numberFormat = (value: number) => {
@@ -77,31 +81,54 @@ export default function JournalPage() {
             setLoading(true);
             try {
                 const supabase = getSupabaseClient();
-                // Consulta 1: pegar os lançamentos (cabeçalhos)
                 const { data: entriesData, error: entriesError } = await supabase
                     .from('journal_entries')
-                    .select('*')
+                    .select('*, journal_entry_lines(*)')
                     .order('created_at', { ascending: false });
-                if (entriesError) {
-                    const message = formatSupabaseError(entriesError);
-                    console.error('Erro ao consultar journal_entries:', entriesError);
-                    toast({ title: 'Erro ao carregar lançamentos', description: message, variant: 'destructive' });
-                    return;
-                }
 
-                const normalized = (Array.isArray(entriesData) ? entriesData : []).map((e: any) => {
-                    const dateStr = e.entry_date ?? e.date ?? e.created_at;
-                    return {
-                        id: String(e.id),
-                        date: dateStr ? new Date(dateStr) : new Date(),
-                        description: e.description ?? '',
-                        documentRef: e.document_ref ?? '',
-                        lines: [],
-                    } as JournalEntry;
-                });
+                let normalized: JournalEntry[] = [];
 
-                // Consulta 2: pegar as linhas e associar por entry_id (ou journal_entry_id)
-                if (normalized.length > 0) {
+                if (!entriesError && Array.isArray(entriesData)) {
+                    normalized = entriesData.map((e: any) => {
+                        const dateStr = e.entry_date ?? e.date ?? e.created_at;
+                        const linesSrc: any[] = Array.isArray(e.journal_entry_lines) ? e.journal_entry_lines : [];
+                    const lines: JournalEntryLine[] = linesSrc.map((l: any) => ({
+                        accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
+                        accountName: String(l.account_name ?? l.accoun_name ?? ''),
+                        debit: Number(l.debit ?? 0),
+                        credit: Number(l.credit ?? 0),
+                    }));
+                        return {
+                            id: String(e.id),
+                            date: dateStr ? new Date(dateStr) : new Date(),
+                            description: e.description ?? '',
+                            documentRef: e.document_ref ?? '',
+                            lines,
+                        } as JournalEntry;
+                    });
+                } else {
+                    // Fallback robusto: duas consultas separadas e associação manual
+                    const { data: entriesData2, error: entriesError2 } = await supabase
+                        .from('journal_entries')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+                    if (entriesError2) {
+                        const message = formatSupabaseError(entriesError2);
+                        console.error('Erro ao consultar journal_entries (fallback):', entriesError2);
+                        toast({ title: 'Erro ao carregar lançamentos', description: message, variant: 'destructive' });
+                        return;
+                    }
+                    const base = (Array.isArray(entriesData2) ? entriesData2 : []).map((e: any) => {
+                        const dateStr = e.entry_date ?? e.date ?? e.created_at;
+                        return {
+                            id: String(e.id),
+                            date: dateStr ? new Date(dateStr) : new Date(),
+                            description: e.description ?? '',
+                            documentRef: e.document_ref ?? '',
+                            lines: [],
+                        } as JournalEntry;
+                    });
+
                     const { data: linesData, error: linesError } = await supabase
                         .from('journal_entry_lines')
                         .select('*');
@@ -109,31 +136,49 @@ export default function JournalPage() {
                         const message = formatSupabaseError(linesError);
                         console.error('Erro ao consultar journal_entry_lines:', linesError);
                         toast({ title: 'Erro ao carregar linhas', description: message, variant: 'destructive' });
+                        normalized = base; // continua sem linhas
                     } else {
-                        console.log(`Entradas carregadas: ${normalized.length}`);
-                        console.log(`Linhas carregadas: ${Array.isArray(linesData) ? linesData.length : 0}`);
                         const byEntry: Record<string, JournalEntryLine[]> = {};
                         for (const l of Array.isArray(linesData) ? linesData : []) {
                             const parentId = String(l.entry_id ?? l.journal_entry_id ?? '');
                             if (!parentId) continue;
                             const line: JournalEntryLine = {
-                                accountId: String(l.account_id ?? ''),
-                                accountName: String(l.account_name ?? ''),
+                                accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
+                                accountName: String(l.account_name ?? l.accoun_name ?? ''),
                                 debit: Number(l.debit ?? 0),
                                 credit: Number(l.credit ?? 0),
                             };
                             byEntry[parentId] = byEntry[parentId] || [];
                             byEntry[parentId].push(line);
                         }
-                        for (const n of normalized) {
-                            n.lines = byEntry[String(n.id)] || [];
-                        }
+                        normalized = base.map(n => ({
+                            ...n,
+                            lines: byEntry[String(n.id)] || [],
+                        }));
                     }
                 }
 
-                normalized.sort((a, b) => b.date.getTime() - a.date.getTime());
+                // Calculate totals and identify transaction types for each entry
+                const enhancedEntries = normalized.map(entry => {
+                    const totalDebit = entry.lines.reduce((sum, line) => sum + line.debit, 0);
+                    const totalCredit = entry.lines.reduce((sum, line) => sum + line.credit, 0);
+                    
+                    // Identify transaction type based on account codes and patterns
+                    const transactionType = entry.lines.length > 0 
+                        ? identifyTransactionType(entry.lines)
+                        : undefined;
+                    
+                    return {
+                        ...entry,
+                        totalDebit,
+                        totalCredit,
+                        transactionType
+                    };
+                });
 
-                if (isMounted) setEntries(normalized);
+                enhancedEntries.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+                if (isMounted) setEntries(enhancedEntries);
                 if (normalized.length === 0) {
                     toast({ title: 'Sem lançamentos', description: 'Nenhum lançamento encontrado em journal_entries.' });
                 }
@@ -169,6 +214,7 @@ export default function JournalPage() {
                     <TableHead>Data</TableHead>
                     <TableHead>Documento</TableHead>
                     <TableHead>Descrição</TableHead>
+                    <TableHead>Tipo de Transação</TableHead>
                     <TableHead>Conta</TableHead>
                     <TableHead className="text-right">Débito</TableHead>
                     <TableHead className="text-right">Crédito</TableHead>
@@ -177,13 +223,13 @@ export default function JournalPage() {
             <TableBody>
                 {loading ? (
                     <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center">
+                        <TableCell colSpan={7} className="h-24 text-center">
                             <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                         </TableCell>
                     </TableRow>
                 ) : !entries || entries.length === 0 ? (
                     <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center">
+                        <TableCell colSpan={7} className="h-24 text-center">
                             Nenhum lançamento registado.
                         </TableCell>
                     </TableRow>
@@ -205,6 +251,19 @@ export default function JournalPage() {
                                         <TableCell rowSpan={displayLines.length} className="align-top">
                                             {entry.description}
                                         </TableCell>
+                                        <TableCell rowSpan={displayLines.length} className="align-top">
+                                            {entry.transactionType && (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-lg">{entry.transactionType.icon}</span>
+                                                    <div>
+                                                        <div className="font-medium text-sm">{entry.transactionType.type}</div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {getTransactionTypeDescription(entry.transactionType.type)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </TableCell>
                                     </>
                                 ) : null}
                                 <TableCell>
@@ -219,6 +278,43 @@ export default function JournalPage() {
                 )}
             </TableBody>
           </Table>
+          
+          {entries.length > 0 && (
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(
+                entries.reduce((acc, entry) => {
+                  if (entry.transactionType) {
+                    const type = entry.transactionType.type;
+                    if (!acc[type]) {
+                      acc[type] = { count: 0, totalDebit: 0, totalCredit: 0, icon: entry.transactionType.icon };
+                    }
+                    acc[type].count++;
+                    acc[type].totalDebit += entry.totalDebit;
+                    acc[type].totalCredit += entry.totalCredit;
+                  }
+                  return acc;
+                }, {} as Record<string, { count: number; totalDebit: number; totalCredit: number; icon: string }>)
+              ).map(([type, data]) => (
+                <div key={type} className="bg-muted/50 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xl">{data.icon}</span>
+                    <h4 className="font-semibold">{type}</h4>
+                    <span className="text-xs text-muted-foreground">({data.count})</span>
+                  </div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Débito total:</span>
+                      <span className="font-mono">{numberFormat(data.totalDebit)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Crédito total:</span>
+                      <span className="font-mono">{numberFormat(data.totalCredit)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </>

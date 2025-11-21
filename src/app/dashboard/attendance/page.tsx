@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { useWorkers, type WorkerWithService } from '@/hooks/use-workers';
 import { useToast } from '@/hooks/use-toast';
 import { AttendanceSheetPrintLayout } from '@/components/dashboard/attendance-sheet-print-layout';
+import { useActivityLogger, ActivityActions, ActivityTargets } from '@/hooks/use-activity-logger';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { useServices } from '@/hooks/use-services';
@@ -46,6 +47,7 @@ interface SavedSheet {
 
 export default function AttendancePage() {
     const { toast } = useToast();
+    const { logActivity } = useActivityLogger();
     const { workers, loading } = useWorkers();
     const { services, loading: servicesLoading } = useServices();
     const [attendance, setAttendance] = useState<Record<string, AttendanceRecord>>({});
@@ -91,18 +93,19 @@ export default function AttendancePage() {
           const { data, error } = await supabase
             .from('attendance_sheets')
             .select('*')
-            .order('date', { ascending: false });
+            .order('sheet_date', { ascending: false });
           if (error) throw error;
           const normalized = (data || []).map((s: any) => ({
             id: String(s.id ?? s.uuid),
-            date: s.date ? new Date(s.date) : new Date(),
+            date: s.sheet_date ? new Date(s.sheet_date) : new Date(),
             responsible: s.responsible ?? 'Admin',
             clientName: s.client_name ?? 'N/A',
-            attendanceData: s.attendance_data ?? {},
+            attendanceData: {}, // This column doesn't exist in the table, default to empty object
           })) as SavedSheet[];
           if (isMounted) setSavedSheets(normalized);
         } catch (err) {
           console.error('Erro ao carregar folhas de assiduidade do Supabase', err);
+          console.error('Error details:', err instanceof Error ? err.message : String(err));
           if (isMounted) setSavedSheets([]);
         }
       }
@@ -138,15 +141,32 @@ export default function AttendancePage() {
             clientName: clientName,
             attendanceData: { ...attendance },
         };
+        
         try {
+          // Log activity before saving
+          const workersCount = Object.keys(attendance).length;
+          const presentWorkers = Object.values(attendance).filter(record => !record.absence).length;
+          
+          await logActivity(
+            ActivityActions.REGISTER,
+            `folha de assiduidade - ${clientName}`,
+            'attendance',
+            {
+              date: currentDate,
+              workersCount,
+              presentWorkers,
+              clientName
+            }
+          );
+          
           const supabase = getSupabaseClient();
           const { data, error } = await supabase
             .from('attendance_sheets')
             .insert({
-              date: newSheet.date.toISOString(),
+              sheet_date: newSheet.date.toISOString().split('T')[0], // Use sheet_date and format as date only
               responsible: newSheet.responsible,
               client_name: newSheet.clientName,
-              attendance_data: newSheet.attendanceData,
+              // attendance_data column doesn't exist, so we don't include it
               created_at: new Date().toISOString(),
             })
             .select()
@@ -154,10 +174,10 @@ export default function AttendancePage() {
           if (error) throw error;
           const inserted: SavedSheet = {
             id: String(data.id ?? newSheet.id),
-            date: data.date ? new Date(data.date) : newSheet.date,
+            date: data.sheet_date ? new Date(data.sheet_date) : newSheet.date,
             responsible: data.responsible ?? newSheet.responsible,
             clientName: data.client_name ?? newSheet.clientName,
-            attendanceData: data.attendance_data ?? newSheet.attendanceData,
+            attendanceData: {}, // This column doesn't exist, default to empty object
           };
           setSavedSheets(prev => [inserted, ...prev]);
           toast({
@@ -166,9 +186,10 @@ export default function AttendancePage() {
           });
         } catch (err) {
           console.error('Erro ao salvar folha de assiduidade no Supabase', err);
+          console.error('Error details:', err instanceof Error ? err.message : String(err));
           toast({
             title: "Erro ao salvar",
-            description: "Não foi possível gravar no Supabase.",
+            description: err instanceof Error ? err.message : "Não foi possível gravar no Supabase.",
             variant: "destructive",
           });
         }

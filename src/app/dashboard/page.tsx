@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { DashboardHeader } from "@/components/dashboard/header";
 import { OverviewChart } from "@/components/dashboard/overview-chart";
-import { RecentActivities } from "@/components/dashboard/recent-activities";
+import { RecentActivities } from "@/components/dashboard/recent-activities-real";
+import { ActivityTest } from "@/components/activity-test";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -63,21 +64,25 @@ export default function DashboardPage() {
           if (isMounted) setActiveServicesCount(0);
         }
 
-        // Monthly revenue from transactions
+        // Monthly revenue from billing
         try {
           const now = new Date();
           const from = new Date(now.getFullYear(), now.getMonth(), 1);
           const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-          const { data: tx, error } = await supabase
-            .from('transactions')
-            .select('amount,type,date')
-            .gte('date', from.toISOString())
-            .lte('date', to.toISOString())
-            .eq('type', 'receita');
+          const { data: billing, error } = await supabase
+            .from('billing')
+            .select('total_amount,issue_date,status')
+            .gte('issue_date', from.toISOString())
+            .lte('issue_date', to.toISOString())
+            .in('status', ['Emitida', 'Pago', 'Parcialmente Pago']);
           if (error) throw error;
-          const revenue = (tx || []).reduce((sum, t: any) => sum + (Number(t.amount) || 0), 0);
+          const revenue = (billing || []).reduce((sum, inv: any) => sum + (Number(inv.total_amount) || 0), 0);
           if (isMounted) setMonthlyRevenue(revenue);
-        } catch (e) {
+        } catch (e: any) {
+          console.error('Erro ao carregar faturas do dashboard:', e);
+          if (e?.code === 'PGRST205') {
+            console.warn('Tabela de faturas não encontrada - métricas de receita não disponíveis');
+          }
           if (isMounted) setMonthlyRevenue(0);
         }
       } catch (err) {
@@ -103,6 +108,7 @@ export default function DashboardPage() {
 
   return (
     <>
+      <ActivityTest />
       <DashboardHeader title="Painel" />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <Card>
@@ -154,7 +160,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{loading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(monthlyRevenue)}</div>
-            <p className="text-xs text-muted-foreground">Soma de receitas do mês</p>
+            <p className="text-xs text-muted-foreground">Soma de faturas do mês (Emitidas/Pagas)</p>
           </CardContent>
         </Card>
       </div>

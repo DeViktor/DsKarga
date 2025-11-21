@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
   Card,
@@ -27,6 +27,8 @@ import { format } from "date-fns";
 import { pt } from 'date-fns/locale';
 import { useRouter } from "next/navigation";
 import { pgcAccounts, type PGCAccount } from '@/lib/pgc-data';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface JournalEntryLine {
     accountId: string;
@@ -53,10 +55,100 @@ const numberFormat = (value: number) => {
 
 export default function BalanceSheetPage() {
     const router = useRouter();
-    // Using mocked data since there's no live connection
     const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]); 
     const [accounts, setAccounts] = useState<PGCAccount[]>(pgcAccounts);
     const [loading, setLoading] = useState(false);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchJournal() {
+            setLoading(true);
+            try {
+                const supabase = getSupabaseClient();
+                const { data: entriesData, error: entriesError } = await supabase
+                    .from('journal_entries')
+                    .select('*, journal_entry_lines(*)')
+                    .order('created_at', { ascending: false });
+
+                let normalized: JournalEntry[] = [];
+
+                if (!entriesError && Array.isArray(entriesData)) {
+                    normalized = entriesData.map((e: any) => {
+                        const dateStr = e.entry_date ?? e.date ?? e.created_at;
+                        const linesSrc: any[] = Array.isArray(e.journal_entry_lines) ? e.journal_entry_lines : [];
+                        const lines: JournalEntryLine[] = linesSrc.map((l: any) => ({
+                            accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
+                            accountName: String(l.account_name ?? ''),
+                            debit: Number(l.debit ?? 0),
+                            credit: Number(l.credit ?? 0),
+                        }));
+                        return {
+                            id: String(e.id),
+                            date: dateStr ? new Date(dateStr) : new Date(),
+                            description: e.description ?? '',
+                            documentRef: e.document_ref ?? '',
+                            lines,
+                        } as JournalEntry;
+                    });
+                } else {
+                    const { data: entriesData2, error: entriesError2 } = await supabase
+                        .from('journal_entries')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+                    if (entriesError2) {
+                        const msg = entriesError2.message || entriesError2.code || 'Falha ao carregar lançamentos.';
+                        toast({ title: 'Erro ao carregar lançamentos', description: msg, variant: 'destructive' });
+                        return;
+                    }
+                    const base = (Array.isArray(entriesData2) ? entriesData2 : []).map((e: any) => {
+                        const dateStr = e.entry_date ?? e.date ?? e.created_at;
+                        return {
+                            id: String(e.id),
+                            date: dateStr ? new Date(dateStr) : new Date(),
+                            description: e.description ?? '',
+                            documentRef: e.document_ref ?? '',
+                            lines: [],
+                        } as JournalEntry;
+                    });
+
+                    const { data: linesData, error: linesError } = await supabase
+                        .from('journal_entry_lines')
+                        .select('*');
+                    if (linesError) {
+                        const msg = linesError.message || linesError.code || 'Falha ao carregar linhas.';
+                        toast({ title: 'Erro ao carregar linhas', description: msg, variant: 'destructive' });
+                        normalized = base;
+                    } else {
+                        const byEntry: Record<string, JournalEntryLine[]> = {};
+                        for (const l of Array.isArray(linesData) ? linesData : []) {
+                            const parentId = String(l.entry_id ?? l.journal_entry_id ?? '');
+                            if (!parentId) continue;
+                            const line: JournalEntryLine = {
+                                accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
+                                accountName: String(l.account_name ?? ''),
+                                debit: Number(l.debit ?? 0),
+                                credit: Number(l.credit ?? 0),
+                            };
+                            byEntry[parentId] = byEntry[parentId] || [];
+                            byEntry[parentId].push(line);
+                        }
+                        normalized = base.map(n => ({ ...n, lines: byEntry[String(n.id)] || [] }));
+                    }
+                }
+
+                if (isMounted) setJournalEntries(normalized);
+            } catch (err: any) {
+                const msg = err?.message || 'Erro inesperado ao carregar lançamentos.';
+                toast({ title: 'Erro', description: msg, variant: 'destructive' });
+                if (isMounted) setJournalEntries([]);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
+        fetchJournal();
+        return () => { isMounted = false; };
+    }, []);
 
     const balanceSheetData = useMemo(() => {
         if (!journalEntries) return null;

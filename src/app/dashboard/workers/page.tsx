@@ -31,12 +31,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { WorkerDialog, type WorkerFormValues } from "@/components/dashboard/worker-dialog";
 import { useWorkers, type WorkerWithService } from "@/hooks/use-workers";
+import type { Worker } from "@/types/worker";
 import { WorkersReportPrintLayout } from "@/components/dashboard/workers-report-print-layout";
 
 
-export interface Worker extends WorkerFormValues {
-  id: string;
-}
+// O tipo Worker agora é importado de @/types/worker
 
 export default function WorkersPage() {
   const [view, setView] = useState<'list' | 'grid'>('grid');

@@ -63,7 +63,7 @@ export default function PayrollPage() {
                     .order('processed_at', { ascending: false });
                 if (error) throw error;
                 const normalized = (data || []).map((r: any) => ({
-                    id: r.id,
+                    id: r.id, // Use the actual UUID id as primary key
                     period: r.period,
                     status: r.status as PayrollRun['status'],
                     totalAmount: r.total_amount || 0,
@@ -71,11 +71,12 @@ export default function PayrollPage() {
                 })) as PayrollRun[];
                 if (isMounted) setPayrollRuns(normalized);
             } catch (err) {
-                console.error('Erro ao carregar folhas de pagamento do Supabase', err);
-                if (isMounted) setPayrollRuns([]);
-            } finally {
-                if (isMounted) setLoading(false);
-            }
+            console.error('Erro ao carregar folhas de pagamento do Supabase', err);
+            console.error('Error details:', err instanceof Error ? err.message : String(err));
+            if (isMounted) setPayrollRuns([]);
+        } finally {
+            if (isMounted) setLoading(false);
+        }
         }
         fetchPayrollRuns();
         return () => { isMounted = false; };
@@ -87,7 +88,7 @@ export default function PayrollPage() {
         nextMonth.setMonth(nextMonth.getMonth() + 1);
 
         const newRun: PayrollRun = {
-            id: `pay-${format(nextMonth, 'yyyy-MM')}`,
+            id: crypto.randomUUID(), // Generate a proper UUID for the id column
             period: format(nextMonth, 'MMMM yyyy', { locale: pt }),
             status: 'Pendente de Aprovação',
             totalAmount: 15650000, // Dummy amount
@@ -100,16 +101,22 @@ export default function PayrollPage() {
             const { error } = await supabase
                 .from('payroll_runs')
                 .insert({
-                    id: newRun.id,
+                    id: newRun.id, // Use the UUID id column
+                    run_id: `PAY-${format(nextMonth, 'yyyy-MM')}`, // Generate the business key
                     period: newRun.period,
                     status: newRun.status,
                     total_amount: newRun.totalAmount,
                     processed_at: newRun.processedAt.toISOString(),
-                    created_at: new Date().toISOString(),
                 });
             if (error) throw error;
         } catch (err) {
             console.error('Erro ao inserir folha de pagamento no Supabase', err);
+            console.error('Error details:', err instanceof Error ? err.message : String(err));
+            toast({
+                title: "Erro ao processar",
+                description: err instanceof Error ? err.message : "Erro ao salvar folha de pagamento no Supabase.",
+                variant: "destructive",
+            });
         }
         toast({
             title: "Processamento Iniciado",
@@ -123,11 +130,17 @@ export default function PayrollPage() {
             const supabase = getSupabaseClient();
             const { error } = await supabase
                 .from('payroll_runs')
-                .update({ status: newStatus, updated_at: new Date().toISOString() })
-                .eq('id', id);
+                .update({ status: newStatus })
+                .eq('id', id); // Use the UUID id column for filtering
             if (error) throw error;
         } catch (err) {
             console.error('Erro ao atualizar status no Supabase', err);
+            console.error('Error details:', err instanceof Error ? err.message : String(err));
+            toast({
+                title: "Erro ao atualizar",
+                description: err instanceof Error ? err.message : "Erro ao atualizar status no Supabase.",
+                variant: "destructive",
+            });
         }
         toast({
             title: "Estado Atualizado",
@@ -168,7 +181,9 @@ export default function PayrollPage() {
         
         const worksheet = XLSX.utils.json_to_sheet([...dataToExport, totals as any]);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, `Pagamentos ${run.period}`);
+        // Ensure sheet name is within Excel's 31-character limit
+        const sheetName = `Pagamentos ${run.period}`.substring(0, 31);
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
         XLSX.writeFile(workbook, `Mapa_Pagamento_${run.period.replace(' ', '_')}.xlsx`);
     }
 

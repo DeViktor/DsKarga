@@ -67,7 +67,9 @@ export default function PayrollDetailPage() {
         
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, `Pagamentos ${period.replace('/', '-')}`);
+        // Ensure sheet name is within Excel's 31-character limit
+        const sheetName = `Pagamentos ${period.replace('/', '-')}`.substring(0, 31);
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
         XLSX.writeFile(workbook, `Mapa_Pagamento_${period.replace('/', '-')}.xlsx`);
   }
 

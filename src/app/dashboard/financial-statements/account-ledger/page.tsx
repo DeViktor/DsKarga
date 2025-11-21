@@ -13,10 +13,12 @@ import { pt } from 'date-fns/locale';
 import { useRouter } from "next/navigation";
 import { pgcAccounts, type PGCAccount } from '@/lib/pgc-data';
 import { getSupabaseClient } from '@/lib/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AccountLedgerPage() {
   const [journalEntries, setJournalEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     let isMounted = true;
@@ -24,15 +26,71 @@ export default function AccountLedgerPage() {
       setLoading(true);
       try {
         const supabase = getSupabaseClient();
-        const { data, error } = await supabase
+        const { data: entriesData, error: entriesError } = await supabase
           .from('journal_entries')
-          .select('*');
-        if (error) throw error;
-        const normalized = (data || []).map((e: any) => ({
-          ...e,
-          date: e.date ? new Date(e.date) : undefined,
-        }));
-        if (isMounted) setJournalEntries(normalized);
+          .select('*, journal_entry_lines(*)')
+          .order('created_at', { ascending: false });
+
+        if (!entriesError && Array.isArray(entriesData)) {
+          const normalized = entriesData.map((e: any) => {
+            const dateStr = e.entry_date ?? e.date ?? e.created_at;
+            const linesSrc: any[] = Array.isArray(e.journal_entry_lines) ? e.journal_entry_lines : [];
+            const lines = linesSrc.map((l: any) => ({
+              accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
+              accountName: String(l.account_name ?? ''),
+              debit: Number(l.debit ?? 0),
+              credit: Number(l.credit ?? 0),
+            }));
+            return {
+              id: String(e.id),
+              date: dateStr ? new Date(dateStr) : undefined,
+              description: e.description ?? '',
+              lines,
+            };
+          });
+          if (isMounted) setJournalEntries(normalized);
+        } else {
+          const { data: entriesData2, error: entriesError2 } = await supabase
+            .from('journal_entries')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (entriesError2) {
+            const msg = entriesError2.message || entriesError2.code || 'Falha ao carregar lançamentos.';
+            toast({ title: 'Erro ao carregar lançamentos', description: msg, variant: 'destructive' });
+            if (isMounted) setJournalEntries([]);
+            return;
+          }
+          const base = (Array.isArray(entriesData2) ? entriesData2 : []).map((e: any) => ({
+            id: String(e.id),
+            date: (e.entry_date ?? e.date ?? e.created_at) ? new Date(e.entry_date ?? e.date ?? e.created_at) : undefined,
+            description: e.description ?? '',
+            lines: [],
+          }));
+          const { data: linesData, error: linesError } = await supabase
+            .from('journal_entry_lines')
+            .select('*');
+          if (linesError) {
+            const msg = linesError.message || linesError.code || 'Falha ao carregar linhas.';
+            toast({ title: 'Erro ao carregar linhas', description: msg, variant: 'destructive' });
+            if (isMounted) setJournalEntries(base);
+          } else {
+            const byEntry: Record<string, any[]> = {};
+            for (const l of Array.isArray(linesData) ? linesData : []) {
+              const parentId = String(l.entry_id ?? l.journal_entry_id ?? '');
+              if (!parentId) continue;
+              const line = {
+                accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
+                accountName: String(l.account_name ?? ''),
+                debit: Number(l.debit ?? 0),
+                credit: Number(l.credit ?? 0),
+              };
+              byEntry[parentId] = byEntry[parentId] || [];
+              byEntry[parentId].push(line);
+            }
+            const normalized = base.map(n => ({ ...n, lines: byEntry[String(n.id)] || [] }));
+            if (isMounted) setJournalEntries(normalized);
+          }
+        }
       } catch (err) {
         console.error('Failed to load journal entries from Supabase', err);
         if (isMounted) setJournalEntries([]);

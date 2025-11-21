@@ -25,8 +25,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore } from '@/firebase';
-import { addSupplier, updateSupplier } from '@/firebase/firestore/purchasing';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { type Supplier } from '@/app/dashboard/purchasing/suppliers/page';
 
@@ -48,7 +47,6 @@ interface SupplierDialogProps {
 
 export function SupplierDialog({ open, onOpenChange, supplier }: SupplierDialogProps) {
     const { toast } = useToast();
-    const firestore = useFirestore();
 
     const form = useForm<SupplierFormValues>({
         resolver: zodResolver(supplierSchema),
@@ -58,26 +56,106 @@ export function SupplierDialog({ open, onOpenChange, supplier }: SupplierDialogP
     useEffect(() => {
         if (open) {
             if (supplier) {
-                form.reset(supplier);
+                console.log('Editing supplier:', supplier);
+                form.reset({
+                    name: supplier.name || '',
+                    nif: supplier.nif || '',
+                    contactEmail: supplier.contactEmail || '',
+                    phone: supplier.phone || '',
+                    address: supplier.address || ''
+                });
             } else {
+                console.log('Adding new supplier');
                 form.reset({ name: '', nif: '', contactEmail: '', phone: '', address: '' });
             }
         }
     }, [supplier, open, form]);
 
     const onSubmit = async (data: SupplierFormValues) => {
-        if (!firestore) return;
         try {
+            const supabase = getSupabaseClient();
+            console.log('Submitting supplier data:', data);
+            console.log('Current supplier:', supplier);
+            
+            let success = false;
+            
             if (supplier) {
-                await updateSupplier(firestore, supplier.id, data);
+                // Update existing supplier
+                console.log('Updating supplier with ID:', supplier.id);
+                
+                // Build update payload only with provided fields
+                const updatePayload: any = {
+                    name: data.name,
+                    nif: data.nif,
+                    contact_email: data.contactEmail || null,
+                    phone: data.phone || null,
+                    address: data.address || null
+                };
+                
+                // Remove undefined/null values that might cause issues
+                Object.keys(updatePayload).forEach(key => {
+                    if (updatePayload[key] === undefined) {
+                        delete updatePayload[key];
+                    }
+                });
+                
+                console.log('Update payload:', updatePayload);
+                
+                const { data: updatedData, error } = await supabase
+                    .from('suppliers')
+                    .update(updatePayload)
+                    .eq('id', supplier.id)
+                    .select()
+                    .single();
+                
+                if (error) {
+                    console.error('Error updating supplier:', error);
+                    console.error('Error details:', error.message, error.code, error.details);
+                    throw new Error(`Failed to update supplier: ${error.message}`);
+                }
+                
+                console.log('Supplier updated successfully:', updatedData);
                 toast({ title: 'Sucesso!', description: 'Fornecedor atualizado.' });
+                success = true;
             } else {
-                await addSupplier(firestore, data);
+                // Create new supplier
+                console.log('Creating new supplier');
+                const insertPayload = {
+                    name: data.name,
+                    nif: data.nif,
+                    contact_email: data.contactEmail || null,
+                    phone: data.phone || null,
+                    address: data.address || null,
+                    created_at: new Date().toISOString()
+                };
+                
+                console.log('Insert payload:', insertPayload);
+                
+                const { data: insertedData, error } = await supabase
+                    .from('suppliers')
+                    .insert(insertPayload)
+                    .select()
+                    .single();
+                
+                if (error) {
+                    console.error('Error creating supplier:', error);
+                    console.error('Error details:', error.message, error.code, error.details);
+                    throw new Error(`Failed to create supplier: ${error.message}`);
+                }
+                
+                console.log('Supplier created successfully:', insertedData);
                 toast({ title: 'Sucesso!', description: 'Novo fornecedor adicionado.' });
+                success = true;
             }
-            onOpenChange(false);
+            
+            // Only close dialog if operation was successful
+            if (success) {
+                onOpenChange(false);
+            }
         } catch (error) {
-            toast({ title: 'Erro!', description: 'Não foi possível guardar os dados.', variant: 'destructive' });
+            console.error('Erro ao salvar fornecedor:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Não foi possível guardar os dados.';
+            toast({ title: 'Erro!', description: errorMessage, variant: 'destructive' });
         }
     };
 

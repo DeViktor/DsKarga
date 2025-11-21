@@ -31,6 +31,7 @@ export type AnalyzeCandidateCvOutput = z.infer<typeof AnalyzeCandidateCvOutputSc
 
 const cvAnalysisPrompt = ai.definePrompt({
   name: 'cvAnalysisPrompt',
+  model: 'googleai/gemini-1.5-flash',
   input: { schema: AnalyzeCandidateCvInputSchema },
   output: { schema: AnalyzeCandidateCvOutputSchema },
   prompt: `

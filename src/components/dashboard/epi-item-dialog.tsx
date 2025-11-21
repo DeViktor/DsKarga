@@ -74,10 +74,24 @@ export function EpiItemDialog({ open, onOpenChange, item, onSave }: EpiItemDialo
     }, [item, open, form]);
 
     const onSubmit = async (data: ItemFormValues) => {
-        const id = item ? item.id : `epi-${Date.now()}`;
-        onSave(id, data);
-        toast({ title: 'Sucesso!', description: item ? 'O item foi atualizado.' : 'O novo item foi adicionado.' });
-        onOpenChange(false);
+        try {
+            if (item) {
+                // Update existing item
+                await onSave(item.id, data);
+            } else {
+                // Add new item - pass null as ID since Supabase will generate it
+                await onSave(null as any, data);
+            }
+            toast({ title: 'Sucesso!', description: item ? 'O item foi atualizado.' : 'O novo item foi adicionado.' });
+            onOpenChange(false);
+        } catch (error) {
+            console.error('Erro ao salvar item:', error);
+            toast({ 
+                title: 'Erro!', 
+                description: `Erro ao ${item ? 'atualizar' : 'adicionar'} item: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+                variant: 'destructive'
+            });
+        }
     };
 
     return (

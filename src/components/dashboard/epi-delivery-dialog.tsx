@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { type Worker } from '@/app/dashboard/workers/page';
+import type { Worker } from '@/types/worker';
 import { Loader2, Truck, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { useEpiItems, type EpiItem } from '@/hooks/use-epis';
@@ -86,33 +86,33 @@ export function EpiDeliveryDialog({ open, onOpenChange, workers, epis, onDeliver
   }, [isPrinting]);
 
   const onSubmit = async (data: DeliveryFormValues) => {
-    const selectedWorker = workers.find((w) => w.id === data.workerId);
-    
-    if (!selectedWorker || !selectedEpi) {
-        toast({ title: 'Erro', description: 'Trabalhador ou EPI inválido.', variant: 'destructive'});
-        return;
-    }
-
-    if (data.quantity > selectedEpi.quantity) {
-        form.setError('quantity', { message: `Quantidade excede o stock. Disponível: ${selectedEpi.quantity}` });
-        return;
-    }
-
-    const newQuantity = selectedEpi.quantity - data.quantity;
-    await updateEpi(selectedEpi.id, { ...selectedEpi, quantity: newQuantity });
-    
-    const deliveryRecord: EpiDelivery = {
-      id: `delivery-${Date.now()}`,
-      ...data,
-      workerName: selectedWorker.name,
-      epiName: selectedEpi.name,
-      date: new Date(),
-      responsible: 'Admin'
-    };
-    
     try {
+      const selectedWorker = workers.find((w) => w.id === data.workerId);
+      
+      if (!selectedWorker || !selectedEpi) {
+          toast({ title: 'Erro', description: 'Trabalhador ou EPI inválido.', variant: 'destructive'});
+          return;
+      }
+
+      if (data.quantity > selectedEpi.quantity) {
+          form.setError('quantity', { message: `Quantidade excede o stock. Disponível: ${selectedEpi.quantity}` });
+          return;
+      }
+
+      const newQuantity = selectedEpi.quantity - data.quantity;
+      await updateEpi(selectedEpi.id, { ...selectedEpi, quantity: newQuantity });
+      
+      const deliveryRecord: EpiDelivery = {
+        id: `delivery-${Date.now()}`,
+        ...data,
+        workerName: selectedWorker.name,
+        epiName: selectedEpi.name,
+        date: new Date(),
+        responsible: 'Admin'
+      };
+      
       const supabase = getSupabaseClient();
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from('epi_deliveries')
         .insert({
           worker_id: deliveryRecord.workerId,
@@ -120,22 +120,34 @@ export function EpiDeliveryDialog({ open, onOpenChange, workers, epis, onDeliver
           epi_id: deliveryRecord.epiId,
           epi_name: deliveryRecord.epiName,
           quantity: deliveryRecord.quantity,
-          date: deliveryRecord.date.toISOString(),
+          delivery_date: deliveryRecord.date.toISOString().split('T')[0], // Use delivery_date and format as date only
           responsible: deliveryRecord.responsible,
           created_at: new Date().toISOString(),
-        });
+        })
+        .select()
+        .single();
       if (error) throw error;
+      
+      // Update the delivery record with the actual database ID
+      deliveryRecord.id = inserted?.id || deliveryRecord.id;
+
+      onDeliverySuccess(deliveryRecord);
+
+      toast({
+        title: 'Entrega Registada!',
+        description: `${data.quantity}x ${selectedEpi.name} entregue(s) a ${selectedWorker.name}. Stock atualizado.`,
+      });
+      setDeliveryDetails(deliveryRecord);
     } catch (err) {
-      console.error('Erro ao gravar entrega de EPI no Supabase', err);
+      console.error('Erro ao processar entrega de EPI', err);
+      console.error('Error details:', err instanceof Error ? err.message : String(err));
+      toast({ 
+        title: 'Erro ao registar entrega', 
+        description: err instanceof Error ? err.message : 'Erro desconhecido ao registar entrega',
+        variant: 'destructive'
+      });
+      throw err;
     }
-
-    onDeliverySuccess(deliveryRecord);
-
-    toast({
-      title: 'Entrega Registada!',
-      description: `${data.quantity}x ${selectedEpi.name} entregue(s) a ${selectedWorker.name}. Stock atualizado.`,
-    });
-    setDeliveryDetails(deliveryRecord);
   };
   
   const handleClose = () => {

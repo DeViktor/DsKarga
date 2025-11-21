@@ -114,6 +114,39 @@ export default function ChartOfAccountsPage() {
     return () => { isMounted = false; };
   }, []);
 
+  useEffect(() => {
+    if (!dialogOpen) {
+      let isMounted = true;
+      (async () => {
+        try {
+          setLoading(true);
+          const supabase = getSupabaseClient();
+          const { data, error } = await supabase
+            .from('pgc_accounts')
+            .select('*')
+            .order('code', { ascending: true });
+          if (!isMounted) return;
+          if (error) {
+            toast({ title: 'Erro ao carregar PGC', description: error.message, variant: 'destructive' });
+            setSupabaseAccounts(null);
+          } else if (data) {
+            const normalized: PGCAccount[] = (data as any[]).map((acc) => ({
+              id: acc.id ?? acc.code,
+              code: acc.code ?? acc.account_code ?? '',
+              name: acc.name ?? acc.account_name ?? '',
+              class: acc.class ?? acc.account_class ?? '',
+              isCustom: false,
+            })).filter(a => a.code && a.name && a.class);
+            setSupabaseAccounts(normalized);
+          }
+        } finally {
+          if (isMounted) setLoading(false);
+        }
+      })();
+      return () => { isMounted = false; };
+    }
+  }, [dialogOpen]);
+
   const allAccounts = useMemo(() => {
     const source = supabaseAccounts && supabaseAccounts.length > 0 ? supabaseAccounts : staticAccounts;
     return [...source].sort((a, b) => a.code.localeCompare(b.code));

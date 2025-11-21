@@ -26,8 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore } from '@/firebase';
-import { addAccount, updateAccount } from '@/firebase/firestore/accounts';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { PGCAccount } from '@/app/dashboard/accounting/chart-of-accounts/page';
 
@@ -47,7 +46,7 @@ interface AccountDialogProps {
 
 export function AccountDialog({ open, onOpenChange, account }: AccountDialogProps) {
     const { toast } = useToast();
-    const firestore = useFirestore();
+    const supabase = getSupabaseClient();
 
     const form = useForm<AccountFormValues>({
         resolver: zodResolver(accountSchema),
@@ -66,20 +65,54 @@ export function AccountDialog({ open, onOpenChange, account }: AccountDialogProp
     }, [account, open, form]);
 
     const onSubmit = async (data: AccountFormValues) => {
-        if (!firestore) return;
         try {
             if (account) {
-                await updateAccount(firestore, account.id, data);
-                 toast({ title: 'Sucesso!', description: 'A conta foi atualizada.' });
+                const basePayload: any = { code: data.code, name: data.name, class: data.class };
+                let { error: updateError } = await supabase
+                    .from('pgc_accounts')
+                    .update(basePayload)
+                    .eq('id', account.id);
+                if (updateError) {
+                    const altPayload: any = { account_code: data.code, account_name: data.name, account_class: data.class };
+                    const altRes = await supabase
+                        .from('pgc_accounts')
+                        .update(altPayload)
+                        .eq('id', account.id);
+                    updateError = altRes.error;
+                }
+                if (updateError) {
+                    const alt2Res = await supabase
+                        .from('pgc_accounts')
+                        .update(basePayload)
+                        .eq('code', account.id);
+                    if (alt2Res.error) throw alt2Res.error;
+                }
+                toast({ title: 'Sucesso!', description: 'A conta foi atualizada.' });
             } else {
-                await addAccount(firestore, data);
+                const basePayload: any = { code: data.code, name: data.name, class: data.class, created_at: new Date().toISOString() };
+                let { data: inserted, error: insertError } = await supabase
+                    .from('pgc_accounts')
+                    .insert(basePayload)
+                    .select('id')
+                    .single();
+                if (insertError) {
+                    const altPayload: any = { account_code: data.code, account_name: data.name, account_class: data.class, created_at: new Date().toISOString() };
+                    const altRes = await supabase
+                        .from('pgc_accounts')
+                        .insert(altPayload)
+                        .select('id')
+                        .single();
+                    insertError = altRes.error;
+                    inserted = altRes.data as any;
+                }
+                if (insertError) throw insertError;
                 toast({ title: 'Sucesso!', description: 'A nova conta foi adicionada.' });
             }
             onOpenChange(false);
-        } catch (error) {
+        } catch (error: any) {
             toast({
                 title: 'Erro!',
-                description: 'Não foi possível guardar a conta.',
+                description: error?.message || 'Não foi possível guardar a conta.',
                 variant: 'destructive',
             });
         }

@@ -25,8 +25,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore } from '@/firebase';
-import { addClient, updateClient } from '@/firebase/firestore/clients';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { Client } from '@/app/dashboard/clients/page';
 
@@ -50,7 +49,7 @@ interface ClientDialogProps {
 
 export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) {
     const { toast } = useToast();
-    const firestore = useFirestore();
+    const supabase = getSupabaseClient();
 
     const form = useForm<ClientFormValues>({
         resolver: zodResolver(clientSchema),
@@ -84,22 +83,46 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
     }, [client, open, form]);
 
     const onSubmit = async (data: ClientFormValues) => {
-        if (!firestore) return;
         try {
             if (client) {
-                await updateClient(firestore, client.id, data);
-                 toast({ title: 'Sucesso!', description: 'O cliente foi atualizado.' });
+                const { error } = await supabase
+                    .from('clients')
+                    .update({
+                        name: data.name,
+                        nif: data.nif,
+                        address: data.address,
+                        province: data.province,
+                        country: data.country,
+                        email: data.email || null,
+                        phone: data.phone || null,
+                    })
+                    .eq('id', client.id);
+                if (error) {
+                    toast({ title: 'Erro!', description: error.message || error.code, variant: 'destructive' });
+                    return;
+                }
+                toast({ title: 'Sucesso!', description: 'O cliente foi atualizado.' });
             } else {
-                await addClient(firestore, data);
+                const { error } = await supabase
+                    .from('clients')
+                    .insert({
+                        name: data.name,
+                        nif: data.nif,
+                        address: data.address,
+                        province: data.province,
+                        country: data.country,
+                        email: data.email || null,
+                        phone: data.phone || null,
+                    });
+                if (error) {
+                    toast({ title: 'Erro!', description: error.message || error.code, variant: 'destructive' });
+                    return;
+                }
                 toast({ title: 'Sucesso!', description: 'O novo cliente foi adicionado.' });
             }
             onOpenChange(false);
-        } catch (error) {
-            toast({
-                title: 'Erro!',
-                description: 'Não foi possível guardar os dados do cliente.',
-                variant: 'destructive',
-            });
+        } catch (error: any) {
+            toast({ title: 'Erro!', description: error?.message || 'Não foi possível guardar os dados do cliente.', variant: 'destructive' });
         }
     };
 

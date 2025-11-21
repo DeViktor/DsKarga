@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
   Card,
@@ -21,9 +21,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { SupplierDialog, type SupplierFormValues } from '@/components/dashboard/purchasing/supplier-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 export interface Supplier extends SupplierFormValues {
     id: string;
@@ -32,14 +32,91 @@ export interface Supplier extends SupplierFormValues {
 export default function PurchaseSuppliersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
-  const firestore = useFirestore();
-  const suppliersQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'suppliers'), orderBy('name'))
-  }, [firestore]);
-  
-  const { data: suppliers, loading } = useCollection<Supplier>(suppliersQuery);
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchSuppliers() {
+      setLoading(true);
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from('suppliers')
+          .select('*')
+          .order('name', { ascending: true });
+        
+        if (error) throw error;
+        
+        const normalized = (data || []).map((s: any) => ({
+          id: s.id,
+          name: s.name || '',
+          nif: s.nif || '',
+          contactEmail: s.contact_email || '',
+          phone: s.phone || '',
+          address: s.address || '',
+          city: s.city || '',
+          country: s.country || '',
+          postalCode: s.postal_code || '',
+          website: s.website || '',
+          notes: s.notes || '',
+        }));
+        
+        if (isMounted) setSuppliers(normalized);
+      } catch (err) {
+        console.error('Erro ao carregar fornecedores do Supabase:', err);
+        toast({ 
+          title: 'Erro', 
+          description: 'Não foi possível carregar os fornecedores.', 
+          variant: 'destructive' 
+        });
+        if (isMounted) setSuppliers([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    fetchSuppliers();
+    return () => { isMounted = false; };
+  }, [toast]);
+
+  const refreshSuppliers = async () => {
+    setLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      
+      const normalized = (data || []).map((s: any) => ({
+        id: s.id,
+        name: s.name || '',
+        nif: s.nif || '',
+        contactEmail: s.contact_email || '',
+        phone: s.phone || '',
+        address: s.address || '',
+        city: s.city || '',
+        country: s.country || '',
+        postalCode: s.postal_code || '',
+        website: s.website || '',
+        notes: s.notes || '',
+      }));
+      
+      setSuppliers(normalized);
+    } catch (err) {
+      console.error('Erro ao recarregar fornecedores:', err);
+      toast({ 
+        title: 'Erro', 
+        description: 'Não foi possível recarregar os fornecedores.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddNew = () => {
     setSelectedSupplier(null);
@@ -47,8 +124,20 @@ export default function PurchaseSuppliersPage() {
   };
   
   const handleEdit = (supplier: Supplier) => {
+    console.log('Editing supplier:', supplier);
     setSelectedSupplier(supplier);
     setDialogOpen(true);
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    console.log('Dialog close called, open:', open, 'selectedSupplier:', selectedSupplier);
+    setDialogOpen(open);
+    // Refresh suppliers list when dialog closes after editing/adding
+    if (!open) {
+      console.log('Refreshing suppliers list...');
+      setSelectedSupplier(null);
+      refreshSuppliers();
+    }
   };
 
   return (
@@ -86,19 +175,13 @@ export default function PurchaseSuppliersPage() {
                   <TableCell>{supplier.contactEmail}</TableCell>
                   <TableCell>{supplier.phone}</TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Abrir menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(supplier)}>Editar</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Ver Histórico de Compras</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive" disabled>Remover</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleEdit(supplier)}
+                    >
+                      Editar
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -112,7 +195,7 @@ export default function PurchaseSuppliersPage() {
 
       <SupplierDialog 
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogClose}
         supplier={selectedSupplier}
       />
     </>

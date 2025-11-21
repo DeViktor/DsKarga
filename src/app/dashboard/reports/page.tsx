@@ -51,17 +51,17 @@ function useTransactions(date: DateRange | undefined) {
         const from = date?.from ? new Date(date.from) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const to = date?.to ? new Date(date.to) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
         const { data, error } = await supabase
-          .from('transactions')
+          .from('cash_flow_transactions')
           .select('*')
-          .gte('date', from.toISOString())
-          .lte('date', to.toISOString());
+          .gte('transaction_date', from.toISOString())
+          .lte('transaction_date', to.toISOString());
         if (error) throw error;
         const normalized = (data || []).map((t: any) => ({
-          id: t.id,
-          date: t.date ? new Date(t.date) : new Date(),
-          description: t.description,
+          id: String(t.id),
+          date: t.transaction_date ? new Date(t.transaction_date) : new Date(),
+          description: t.description || 'Transação',
           type: t.type,
-          category: t.category,
+          category: t.category || 'Geral',
           amount: Number(t.amount) || 0,
         })) as Transaction[];
         if (isMounted) setTransactions(normalized);
@@ -95,7 +95,9 @@ function downloadGeneralXLSX(allData: Record<string, ReportData>) {
     Object.entries(allData).forEach(([key, data]) => {
         const title = key.charAt(0).toUpperCase() + key.slice(1);
         const worksheet = XLSX.utils.json_to_sheet(data);
-        XLSX.utils.book_append_sheet(workbook, worksheet, title);
+        // Ensure sheet name is within Excel's 31-character limit
+        const sheetName = title.substring(0, 31);
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
     });
 
     const filename = `Relatorio_Geral_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;

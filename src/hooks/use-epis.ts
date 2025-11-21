@@ -41,6 +41,7 @@ export function useEpiItems() {
         if (isMounted) setEpis(normalized);
       } catch (err) {
         console.error('Erro ao carregar EPIs do Supabase', err);
+        console.error('Error details:', err instanceof Error ? err.message : String(err));
         if (isMounted) setEpis([]);
       } finally {
         if (isMounted) setLoading(false);
@@ -68,14 +69,15 @@ export function useEpiItems() {
       setEpis(prev => prev.map(epi => epi.id === id ? { ...epi, ...data } : epi));
     } catch (err) {
       console.error('Erro ao atualizar EPI no Supabase', err);
+      throw err; // Re-throw to allow caller to handle
     }
   };
   
-  const addEpi = async (id: string, data: EpiItem) => {
+  const addEpi = async (id: string | null, data: EpiItem) => {
+    let payload;
     try {
       const supabase = getSupabaseClient();
-      const payload = {
-        id,
+      payload = {
         name: data.name,
         category: data.category,
         quantity: data.quantity,
@@ -87,7 +89,7 @@ export function useEpiItems() {
       const { data: inserted, error } = await supabase.from('epi_items').insert(payload).select().single();
       if (error) throw error;
       const normalized: EpiItem = {
-        id: String(inserted?.id ?? id),
+        id: String(inserted?.id),
         name: inserted?.name ?? data.name,
         category: inserted?.category ?? data.category,
         quantity: Number(inserted?.quantity ?? data.quantity),
@@ -98,6 +100,9 @@ export function useEpiItems() {
       setEpis(prev => [...prev, normalized]);
     } catch (err) {
       console.error('Erro ao adicionar EPI no Supabase', err);
+      console.error('Error details:', err instanceof Error ? err.message : String(err));
+      console.error('Payload that failed:', payload);
+      throw err; // Re-throw to allow caller to handle
     }
   };
 

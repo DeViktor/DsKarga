@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardHeader } from "@/components/dashboard/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,14 +11,17 @@ import { format } from "date-fns";
 import { pt } from 'date-fns/locale';
 import { useRouter } from "next/navigation";
 import { type Transaction } from "@/components/dashboard/cash-flow/transaction-dialog";
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import * as XLSX from 'xlsx';
 
-const initialTransactions: Transaction[] = [
-    { id: '1', date: new Date('2024-07-28'), description: 'Pagamento Fatura #0012 - Cliente A', type: 'receita', category: 'Vendas', amount: 850000 },
-    { id: '2', date: new Date('2024-07-25'), description: 'Pagamento de Salários - Julho', type: 'despesa', category: 'Salários', amount: 1200000 },
-    { id: '3', date: new Date('2024-07-22'), description: 'Compra de EPIs', type: 'despesa', category: 'Compras', amount: 350000 },
-];
+const classifyCategory = (category: string): 'operating' | 'investing' | 'financing' => {
+    const c = (category || '').toLowerCase();
+    if (c.includes('invest') || c.includes('imobil') || c.includes('aquisi')) return 'investing';
+    if (c.includes('financ') || c.includes('empr') || c.includes('loan') || c.includes('capital')) return 'financing';
+    return 'operating';
+};
 
 const numberFormat = (value: number) => {
     return new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' }).format(value);
@@ -26,12 +29,48 @@ const numberFormat = (value: number) => {
 
 export default function CashFlowStatementPage() {
     const router = useRouter();
-    const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchTransactions() {
+            try {
+                const supabase = getSupabaseClient();
+                const { data, error } = await supabase
+                    .from('cash_flow_transactions')
+                    .select('id, description, amount, type, category, transaction_date')
+                    .order('transaction_date', { ascending: false });
+                if (error) {
+                    if (error.code || error.message) {
+                        toast({ title: 'Erro ao carregar transações', description: error.message || error.code, variant: 'destructive' });
+                    }
+                    if (isMounted) setTransactions([]);
+                    return;
+                }
+                const mapped = (data || []).map((t: any) => ({
+                    id: String(t.id),
+                    date: t.transaction_date ? new Date(t.transaction_date) : new Date(),
+                    description: t.description || 'Transação',
+                    type: t.type,
+                    category: t.category || 'Geral',
+                    amount: Number(t.amount) || 0,
+                })) as Transaction[];
+                if (isMounted) setTransactions(mapped);
+            } catch (err: any) {
+                const msg = err?.message || 'Erro inesperado ao carregar transações.';
+                toast({ title: 'Erro', description: msg, variant: 'destructive' });
+                if (isMounted) setTransactions([]);
+            }
+        }
+        fetchTransactions();
+        return () => { isMounted = false; };
+    }, []);
 
     const cashFlowData = useMemo(() => {
-        const operating = transactions.filter(t => ['Vendas', 'Salários', 'Compras'].includes(t.category));
-        const investing: Transaction[] = []; // Adicionar lógica se houver categorias de investimento
-        const financing: Transaction[] = []; // Adicionar lógica se houver categorias de financiamento
+        const operating = transactions.filter(t => classifyCategory(t.category) === 'operating');
+        const investing = transactions.filter(t => classifyCategory(t.category) === 'investing');
+        const financing = transactions.filter(t => classifyCategory(t.category) === 'financing');
 
         const totalOperating = operating.reduce((acc, t) => acc + (t.type === 'receita' ? t.amount : -t.amount), 0);
         const totalInvesting = investing.reduce((acc, t) => acc + (t.type === 'receita' ? t.amount : -t.amount), 0);

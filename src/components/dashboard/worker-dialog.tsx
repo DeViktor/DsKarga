@@ -26,10 +26,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore } from '@/firebase';
-import { addWorker, updateWorker } from '@/firebase/firestore/workers';
+import { addWorkerSupabase, updateWorkerSupabase } from '@/lib/supabase/actions';
+import { useActivityLogger, ActivityActions, ActivityTargets } from '@/hooks/use-activity-logger';
 import { Loader2, Search, PlusCircle } from 'lucide-react';
-import { Worker } from '@/app/dashboard/workers/page';
+import type { Worker } from '@/types/worker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Separator } from '../ui/separator';
 import { useCandidates, type Candidate } from '@/hooks/use-candidates';
@@ -58,9 +58,10 @@ interface WorkerDialogProps {
 
 export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) {
     const { toast } = useToast();
-    const firestore = useFirestore();
+    const { logActivity } = useActivityLogger();
     const { candidates } = useCandidates();
     const [candidateSearchTerm, setCandidateSearchTerm] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
     const form = useForm<WorkerFormValues>({
         resolver: zodResolver(workerSchema),
@@ -85,22 +86,46 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
     }, [worker, open, form]);
 
     const onSubmit = async (data: WorkerFormValues) => {
-        if (!firestore) return;
+        setIsLoading(true);
         try {
             if (worker) {
-                await updateWorker(firestore, worker.id, data);
-                 toast({ title: 'Sucesso!', description: 'Os dados do trabalhador foram atualizados.' });
+                await updateWorkerSupabase(worker.id, data);
+                await logActivity(
+                    ActivityActions.UPDATE,
+                    data.name,
+                    'worker',
+                    { 
+                        workerId: worker.id,
+                        department: data.department,
+                        role: data.role,
+                        contractStatus: data.contractStatus 
+                    }
+                );
+                toast({ title: 'Sucesso!', description: 'Os dados do trabalhador foram atualizados.' });
             } else {
-                await addWorker(firestore, data);
+                await addWorkerSupabase(data);
+                await logActivity(
+                    ActivityActions.CREATE,
+                    data.name,
+                    'worker',
+                    { 
+                        department: data.department,
+                        role: data.role,
+                        contractStatus: data.contractStatus 
+                    }
+                );
                 toast({ title: 'Sucesso!', description: 'O novo trabalhador foi adicionado.' });
             }
             onOpenChange(false);
         } catch (error) {
+            console.error('Erro ao salvar trabalhador:', error);
             toast({
                 title: 'Erro!',
                 description: 'Não foi possível guardar os dados do trabalhador.',
                 variant: 'destructive',
             });
+        } finally {
+            setIsLoading(false);
         }
     };
     
@@ -181,8 +206,8 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                                 </div>
                                 <DialogFooter className="pt-4">
                                     <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                                    <Button type="submit" disabled={form.formState.isSubmitting}>
-                                        {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    <Button type="submit" disabled={isLoading}>
+                                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         Guardar
                                     </Button>
                                 </DialogFooter>

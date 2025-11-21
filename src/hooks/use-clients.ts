@@ -27,6 +27,8 @@ export function useClients() {
                     address: c.address,
                     province: c.province,
                     country: c.country,
+                    email: c.email ?? undefined,
+                    phone: c.phone ?? undefined,
                 })) as Client[];
                 if (isMounted) setClients(normalized);
             } catch (err) {
@@ -37,7 +39,51 @@ export function useClients() {
             }
         }
         fetchClients();
-        return () => { isMounted = false; };
+
+        const supabase = getSupabaseClient();
+        const channel = supabase
+            .channel('clients-live')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, (payload: any) => {
+                setClients(prev => {
+                    if (payload.eventType === 'INSERT') {
+                        const c = payload.new;
+                        return [...prev, {
+                            id: c.id,
+                            name: c.name,
+                            nif: c.nif,
+                            address: c.address,
+                            province: c.province,
+                            country: c.country,
+                            email: c.email ?? undefined,
+                            phone: c.phone ?? undefined,
+                        } as Client];
+                    }
+                    if (payload.eventType === 'UPDATE') {
+                        const c = payload.new;
+                        return prev.map(p => p.id === c.id ? {
+                            id: c.id,
+                            name: c.name,
+                            nif: c.nif,
+                            address: c.address,
+                            province: c.province,
+                            country: c.country,
+                            email: c.email ?? undefined,
+                            phone: c.phone ?? undefined,
+                        } as Client : p);
+                    }
+                    if (payload.eventType === 'DELETE') {
+                        const c = payload.old;
+                        return prev.filter(p => p.id !== c.id);
+                    }
+                    return prev;
+                });
+            })
+            .subscribe();
+
+        return () => { 
+            isMounted = false; 
+            try { supabase.removeChannel(channel); } catch {}
+        };
     }, []);
 
     const sortedClients = useMemo(() => {

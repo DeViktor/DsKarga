@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { type Worker } from '@/app/dashboard/workers/page';
+import type { Worker } from '@/types/worker';
 import { useServices } from './use-services';
 import { getSupabaseClient } from '@/lib/supabase/client';
 
@@ -34,7 +34,7 @@ export function useWorkers() {
           department: w.department ?? '',
           category: w.category ?? '',
           baseSalary: Number(w.base_salary ?? w.baseSalary ?? 0),
-          contractStatus: (w.status ?? 'Ativo') as Worker['contractStatus'],
+          contractStatus: (w.contract_status ?? 'Ativo') as Worker['contractStatus'],
           type: (w.type ?? 'Eventual') as Worker['type'],
         })) as WorkerWithService[];
 

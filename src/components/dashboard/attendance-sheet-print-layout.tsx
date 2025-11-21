@@ -4,7 +4,7 @@
 import { Logo } from "@/components/icons";
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { type Worker } from "@/app/dashboard/workers/page";
+import type { Worker } from "@/types/worker";
 import {
   Table,
   TableBody,

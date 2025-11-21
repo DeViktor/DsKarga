@@ -60,7 +60,6 @@ export default function PurchaseOrdersPage() {
       const { data, error } = await supabase
         .from('purchase_orders')
         .select('*')
-        .order('issue_date', { ascending: false })
         .order('created_at', { ascending: false });
       if (error) {
         toast({ title: 'Erro', description: error.message || 'Falha ao carregar ordens.', variant: 'destructive' });

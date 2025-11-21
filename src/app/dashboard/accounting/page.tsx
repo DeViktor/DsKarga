@@ -12,9 +12,11 @@ import {
 import { Book, Landmark, Banknote, FilePlus, FolderKanban, Receipt, TrendingUp, TrendingDown } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { pgcAccounts } from "@/lib/pgc-data";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface JournalEntryLine {
     accountId: string;
@@ -28,44 +30,92 @@ interface JournalEntry {
     lines: JournalEntryLine[];
 }
 
-// Mocked journal entries for demonstration
-const journalEntries: JournalEntry[] = [
-    {
-        id: "1",
-        lines: [
-            { accountId: "43", accountName: "Caixa", debit: 850000, credit: 0 },
-            { accountId: "71", accountName: "Vendas", debit: 0, credit: 850000 },
-        ]
-    },
-    {
-        id: "2",
-        lines: [
-            { accountId: "631", accountName: "Remunerações", debit: 1200000, credit: 0 },
-            { accountId: "41", accountName: "Depósitos à Ordem", debit: 0, credit: 1200000 },
-        ]
-    },
-     {
-        id: "3",
-        lines: [
-            { accountId: "26", accountName: "Matérias Subsidiárias, Consumíveis", debit: 350000, credit: 0 },
-            { accountId: "41", accountName: "Depósitos à Ordem", debit: 0, credit: 350000 },
-        ]
-    }
-];
-
 
 export default function AccountingDashboardPage() {
-  
-  const entriesLoading = false; // Mocking loading state
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [entriesLoading, setEntriesLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchJournal() {
+      setEntriesLoading(true);
+      try {
+        const supabase = getSupabaseClient();
+        const { data: entriesData, error: entriesError } = await supabase
+          .from('journal_entries')
+          .select('*, journal_entry_lines(*)')
+          .order('created_at', { ascending: false });
+
+        let normalized: JournalEntry[] = [];
+
+        if (!entriesError && Array.isArray(entriesData)) {
+          normalized = entriesData.map((e: any) => {
+            const linesSrc: any[] = Array.isArray(e.journal_entry_lines) ? e.journal_entry_lines : [];
+            const lines: JournalEntryLine[] = linesSrc.map((l: any) => ({
+              accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
+              accountName: String(l.account_name ?? ''),
+              debit: Number(l.debit ?? 0),
+              credit: Number(l.credit ?? 0),
+            }));
+            return { id: String(e.id), lines } as JournalEntry;
+          });
+        } else {
+          const { data: entriesData2, error: entriesError2 } = await supabase
+            .from('journal_entries')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (entriesError2) {
+            const msg = entriesError2.message || entriesError2.code || 'Falha ao carregar lançamentos.';
+            toast({ title: 'Erro ao carregar lançamentos', description: msg, variant: 'destructive' });
+            return;
+          }
+          const base = (Array.isArray(entriesData2) ? entriesData2 : []).map((e: any) => ({ id: String(e.id), lines: [] } as JournalEntry));
+          const { data: linesData, error: linesError } = await supabase
+            .from('journal_entry_lines')
+            .select('*');
+          if (linesError) {
+            const msg = linesError.message || linesError.code || 'Falha ao carregar linhas.';
+            toast({ title: 'Erro ao carregar linhas', description: msg, variant: 'destructive' });
+            normalized = base;
+          } else {
+            const byEntry: Record<string, JournalEntryLine[]> = {};
+            for (const l of Array.isArray(linesData) ? linesData : []) {
+              const parentId = String(l.entry_id ?? l.journal_entry_id ?? '');
+              if (!parentId) continue;
+              const line: JournalEntryLine = {
+                accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
+                accountName: String(l.account_name ?? ''),
+                debit: Number(l.debit ?? 0),
+                credit: Number(l.credit ?? 0),
+              };
+              byEntry[parentId] = byEntry[parentId] || [];
+              byEntry[parentId].push(line);
+            }
+            normalized = base.map(n => ({ ...n, lines: byEntry[String(n.id)] || [] }));
+          }
+        }
+
+        if (isMounted) setEntries(normalized);
+      } catch (err: any) {
+        const msg = err?.message || 'Erro inesperado ao carregar lançamentos.';
+        toast({ title: 'Erro', description: msg, variant: 'destructive' });
+        if (isMounted) setEntries([]);
+      } finally {
+        if (isMounted) setEntriesLoading(false);
+      }
+    }
+    fetchJournal();
+    return () => { isMounted = false; };
+  }, []);
 
   const totals = useMemo(() => {
-      if (!journalEntries) return { assets: 0, liabilities: 0, equity: 0, revenue: 0, expenses: 0 };
-      
       const balances: { [key: string]: number } = {};
-      journalEntries.forEach(entry => {
-        entry.lines.forEach(line => {
-            if (!balances[line.accountId]) balances[line.accountId] = 0;
-            balances[line.accountId] += (line.debit || 0) - (line.credit || 0);
+      (entries || []).forEach(entry => {
+        (entry.lines || []).forEach(line => {
+          if (!line.accountId) return;
+          if (!balances[line.accountId]) balances[line.accountId] = 0;
+          balances[line.accountId] += (line.debit || 0) - (line.credit || 0);
         });
       });
 
@@ -100,7 +150,7 @@ export default function AccountingDashboardPage() {
 
       return { assets, liabilities, equity: calculatedEquity, revenue, expenses };
 
-  }, [journalEntries]);
+  }, [entries]);
 
   const loading = entriesLoading;
 

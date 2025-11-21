@@ -2,6 +2,7 @@
 
 'use client';
 
+import { useState, useEffect } from 'react';
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
   Card,
@@ -21,9 +22,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Check, X, Eye } from "lucide-react";
-import { terminationRequests } from "@/lib/data";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { approveTerminationRequest, rejectTerminationRequest } from '@/lib/supabase/actions';
+import { useToast } from '@/hooks/use-toast';
 
 
 const purchaseRequests = [
@@ -38,7 +41,87 @@ const payrolls = [
 ]
 
 
+interface TerminationRequest {
+  id: string;
+  worker_name: string;
+  request_date: string;
+  reason: string;
+  status: string;
+  worker_id: string;
+  notes?: string;
+  final_feedback?: string;
+  termination_date?: string;
+}
+
 export default function ApprovalsPage() {
+  const { toast } = useToast();
+  const [terminationRequests, setTerminationRequests] = useState<TerminationRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchTerminationRequests();
+  }, []);
+
+  const fetchTerminationRequests = async () => {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('termination_requests')
+        .select('*')
+        .eq('status', 'Pendente')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTerminationRequests(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar solicitações de desligamento:', error);
+      toast({
+        title: "Erro!",
+        description: "Não foi possível carregar as solicitações de desligamento.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async (requestId: string) => {
+    try {
+      // For now, using a default admin user ID. In a real app, this would come from auth context
+      await approveTerminationRequest(requestId, '00000000-0000-0000-0000-000000000000');
+      toast({
+        title: "Sucesso!",
+        description: "Solicitação de desligamento aprovada com sucesso.",
+      });
+      fetchTerminationRequests();
+    } catch (error) {
+      console.error('Erro ao aprovar solicitação:', error);
+      toast({
+        title: "Erro!",
+        description: "Não foi possível aprovar a solicitação de desligamento.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReject = async (requestId: string) => {
+    try {
+      // For now, using a default admin user ID. In a real app, this would come from auth context
+      await rejectTerminationRequest(requestId, 'Rejeitado pelo administrador', '00000000-0000-0000-0000-000000000000');
+      toast({
+        title: "Sucesso!",
+        description: "Solicitação de desligamento rejeitada com sucesso.",
+      });
+      fetchTerminationRequests();
+    } catch (error) {
+      console.error('Erro ao rejeitar solicitação:', error);
+      toast({
+        title: "Erro!",
+        description: "Não foi possível rejeitar a solicitação de desligamento.",
+        variant: "destructive",
+      });
+    }
+  };
   return (
     <>
       <DashboardHeader title="Central de Aprovações" />
@@ -58,6 +141,11 @@ export default function ApprovalsPage() {
                 </CardDescription>
                 </CardHeader>
                 <CardContent>
+                {loading ? (
+                    <div className="flex justify-center items-center h-32">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                    </div>
+                ) : (
                 <Table>
                     <TableHeader>
                     <TableRow>
@@ -71,20 +159,20 @@ export default function ApprovalsPage() {
                     <TableBody>
                     {terminationRequests.map((request) => (
                         <TableRow key={request.id}>
-                        <TableCell className="font-medium">{request.workerName}</TableCell>
-                        <TableCell>{request.requestDate}</TableCell>
+                        <TableCell className="font-medium">{request.worker_name}</TableCell>
+                        <TableCell>{new Date(request.request_date).toLocaleDateString('pt-AO')}</TableCell>
                         <TableCell>{request.reason}</TableCell>
                         <TableCell className="text-center">
                             <Badge variant="secondary">{request.status}</Badge>
                         </TableCell>
                         <TableCell className="text-right space-x-2">
                              <Button variant="outline" size="sm" asChild>
-                                <Link href={`/dashboard/workers/${request.workerId}/termination`}><Eye className="mr-2 h-4 w-4" /> Ver</Link>
+                                <Link href={`/dashboard/workers/${request.worker_id}/termination`}><Eye className="mr-2 h-4 w-4" /> Ver</Link>
                             </Button>
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" onClick={() => handleReject(request.id)}>
                             <X className="mr-2 h-4 w-4" /> Rejeitar
                             </Button>
-                            <Button size="sm">
+                            <Button size="sm" onClick={() => handleApprove(request.id)}>
                             <Check className="mr-2 h-4 w-4" /> Aprovar
                             </Button>
                         </TableCell>
@@ -99,6 +187,7 @@ export default function ApprovalsPage() {
                     )}
                     </TableBody>
                 </Table>
+                )}
                 </CardContent>
             </Card>
         </TabsContent>

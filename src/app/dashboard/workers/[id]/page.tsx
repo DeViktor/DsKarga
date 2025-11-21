@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { workers as staticWorkers } from "@/lib/data";
-import { type Worker } from "../page";
+import type { Worker } from "@/types/worker";
 import { notFound, useParams, useRouter } from "next/navigation";
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
@@ -66,8 +66,8 @@ import { WorkerPayslipPrintLayout } from '@/components/dashboard/worker-payslip-
 import { WorkerDisciplinaryPrintLayout, type DisciplinaryAction } from '@/components/dashboard/worker-disciplinary-print-layout';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { admitWorkerSupabase } from '@/lib/supabase/actions';
 
 
 const attendanceHistory = [
@@ -107,32 +107,55 @@ export default function WorkerDetailPage() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { toast } = useToast();
   
-  const firestore = useFirestore();
-  const workersQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'workers'), orderBy('name'));
-  }, [firestore]);
+  const [loading, setLoading] = useState(true);
+  const [workers, setWorkers] = useState<Worker[]>([]);
 
-  const { data: firestoreWorkers, loading } = useCollection<Worker>(workersQuery);
-  
-  const allWorkers = useMemo(() => {
-    const combinedWorkers = [...staticWorkers, ...(firestoreWorkers || [])];
-    const uniqueWorkers = Array.from(new Map(combinedWorkers.map(item => [item.id, item])).values());
-    return uniqueWorkers;
-  }, [firestoreWorkers]);
+  useEffect(() => {
+    async function fetchWorkers() {
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from('workers')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+
+        const normalized = (data || []).map((w: any) => ({
+          id: w.id,
+          name: w.name ?? '',
+          role: w.role ?? '',
+          department: w.department ?? '',
+          category: w.category ?? '',
+          baseSalary: Number(w.base_salary ?? w.baseSalary ?? 0),
+          contractStatus: (w.status ?? 'Ativo') as Worker['contractStatus'],
+          type: (w.type ?? 'Eventual') as Worker['type'],
+        })) as Worker[];
+
+        setWorkers(normalized);
+      } catch (err) {
+        console.error('Erro ao carregar trabalhadores do Supabase', err);
+        setWorkers([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchWorkers();
+  }, []);
 
   const [worker, setWorker] = useState<Worker | undefined>(undefined);
   
   useEffect(() => {
-    if(!loading && allWorkers.length > 0) {
-      setWorker(allWorkers.find(w => w.id === id));
+    if(!loading && workers.length > 0) {
+      setWorker(workers.find(w => w.id === id));
     }
-  }, [id, allWorkers, loading]);
+  }, [id, workers, loading]);
 
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState<null | 'pass' | 'sheet' | 'payslip' | 'disciplinary'>(null);
   const [payslipData, setPayslipData] = useState<{period: string, netSalary: number} | null>(null);
+  const [isAdmissionDialogOpen, setIsAdmissionDialogOpen] = useState(false);
   
   const [performanceHistory, setPerformanceHistory] = useState(initialPerformanceHistory);
   
@@ -176,6 +199,56 @@ export default function WorkerDetailPage() {
       return () => clearTimeout(timer);
     }
   }, [isPrinting, worker, payslipData, currentDisciplinaryAction]);
+
+  const handleAdmission = async () => {
+    if (!worker) return;
+    
+    try {
+      await admitWorkerSupabase(worker.id, {
+        admissionDate: new Date().toISOString().split('T')[0],
+        position: worker.role,
+        department: worker.department,
+        salary: worker.baseSalary,
+        contractType: worker.type,
+      });
+      
+      toast({
+        title: "Sucesso!",
+        description: `Funcionário ${worker.name} admitido com sucesso.`,
+      });
+      
+      // Recarregar dados do worker
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('workers')
+        .select('*')
+        .eq('id', worker.id)
+        .single();
+      
+      if (!error && data) {
+        const normalized = {
+          id: data.id,
+          name: data.name ?? '',
+          role: data.role ?? '',
+          department: data.department ?? '',
+          category: data.category ?? '',
+          baseSalary: Number(data.base_salary ?? data.baseSalary ?? 0),
+          contractStatus: (data.contract_status ?? 'Ativo') as Worker['contractStatus'],
+          type: (data.type ?? 'Eventual') as Worker['type'],
+        };
+        setWorker(normalized);
+      }
+      
+      setIsAdmissionDialogOpen(false);
+    } catch (error) {
+      console.error('Erro ao admitir funcionário:', error);
+      toast({
+        title: "Erro!",
+        description: "Não foi possível admitir o funcionário.",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (loading || worker === undefined) {
     return (
@@ -456,11 +529,30 @@ export default function WorkerDetailPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <Button variant="secondary" onClick={() => console.log('Admitir')}>Admitir</Button>
+                                <Button variant="secondary" onClick={() => setIsAdmissionDialogOpen(true)}>Admitir</Button>
                                 <AlertDialogAction asChild>
                                     <Link href={`/dashboard/workers/${worker.id}/termination`}>Desligar</Link>
                                 </AlertDialogAction>
                             </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      
+                      {/* Dialog de Confirmação de Admissão */}
+                      <AlertDialog open={isAdmissionDialogOpen} onOpenChange={setIsAdmissionDialogOpen}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar Admissão</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja admitir o trabalhador <span className="font-bold">{worker.name}</span>? 
+                              Esta ação irá atualizar o status do contrato para 'Ativo'.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleAdmission}>
+                              Confirmar Admissão
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
                   </CardContent>

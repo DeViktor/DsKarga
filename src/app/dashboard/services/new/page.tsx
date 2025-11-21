@@ -30,13 +30,14 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { addServiceRequisitionSupabase } from '@/lib/supabase/actions';
 import { ServiceRequisitionPrintLayout } from '@/components/dashboard/service-requisition-print-layout';
+import { useActivityLogger, ActivityActions, ActivityTargets } from '@/hooks/use-activity-logger';
 import { type Client } from '@/app/dashboard/clients/page';
 import { useClients } from '@/hooks/use-clients';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useWorkers } from '@/hooks/use-workers';
-import { type Worker } from '@/app/dashboard/workers/page';
+import type { Worker } from '@/types/worker';
 
 
 const requisitionSchema = z.object({
@@ -66,6 +67,7 @@ export default function NewServicePage() {
   const pathname = usePathname();
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
+  const { logActivity } = useActivityLogger();
   const [isPrinting, setIsPrinting] = useState(false);
 
   const { clients, loading: clientsLoading } = useClients();
@@ -111,6 +113,22 @@ export default function NewServicePage() {
   const onSubmit = async (data: RequisitionFormValues) => {
     try {
       await addServiceRequisitionSupabase(data);
+      
+      // Log activity for service creation
+      const clientName = clients.find(c => c.id === data.client)?.name || 'Cliente';
+      await logActivity(
+        ActivityActions.CREATE,
+        `${data.type} - ${clientName}`,
+        'service',
+        {
+          type: data.type,
+          client: data.client,
+          requestingArea: data.requestingArea,
+          estimatedStaff: data.estimatedStaff,
+          budget: data.budget
+        }
+      );
+      
       toast({
         title: "Sucesso!",
         description: "O serviço foi submetido com sucesso.",

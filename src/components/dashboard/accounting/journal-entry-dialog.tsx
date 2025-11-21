@@ -233,10 +233,10 @@ export function JournalEntryDialog({ onEntryAdded }: JournalEntryDialogProps) {
                 created_at: new Date().toISOString(),
             }));
             let { error: lineError } = await supabase
-                .from('journal_entries_lines')
+                .from('journal_entry_lines')
                 .insert(lineRows);
             // Fallback: se coluna entry_id não existir, tentar journal_entry_id
-            if (lineError && /column .*entry_id.* does not exist/i.test(lineError.message || '')) {
+            if (lineError && /entry_id/i.test((lineError.message || '').toLowerCase())) {
                 const altRows = data.lines.map(l => ({
                     journal_entry_id: entryId,
                     account_id: l.accountId,
@@ -246,7 +246,37 @@ export function JournalEntryDialog({ onEntryAdded }: JournalEntryDialogProps) {
                     created_at: new Date().toISOString(),
                 }));
                 const altRes = await supabase
-                    .from('journal_entries_lines')
+                    .from('journal_entry_lines')
+                    .insert(altRows);
+                lineError = altRes.error;
+            }
+            // Fallback: se coluna account_id não existir, tentar account_code
+            if (lineError && /account_id/i.test((lineError.message || '').toLowerCase())) {
+                const altRows = data.lines.map(l => ({
+                    entry_id: entryId,
+                    account_code: l.accountId,
+                    account_name: l.accountName,
+                    debit: l.debit,
+                    credit: l.credit,
+                    created_at: new Date().toISOString(),
+                }));
+                const altRes = await supabase
+                    .from('journal_entry_lines')
+                    .insert(altRows);
+                lineError = altRes.error;
+            }
+            // Fallback: se coluna account_name estiver com typo accoun_name
+            if (lineError && /account_name/i.test((lineError.message || '').toLowerCase())) {
+                const altRows = data.lines.map(l => ({
+                    entry_id: entryId,
+                    account_id: l.accountId,
+                    accoun_name: l.accountName,
+                    debit: l.debit,
+                    credit: l.credit,
+                    created_at: new Date().toISOString(),
+                }));
+                const altRes = await supabase
+                    .from('journal_entry_lines')
                     .insert(altRows);
                 lineError = altRes.error;
             }

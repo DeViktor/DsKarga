@@ -123,19 +123,31 @@ export default function BillingPage() {
         toast({ title: 'Sem itens', description: 'Adicione itens à fatura antes de salvar.', variant: 'destructive' });
         return;
       }
+      
       try {
         const supabase = getSupabaseClient();
+        
+        // Ensure required fields have valid values
+        const finalIssueDate = issueDate ? new Date(issueDate) : new Date();
+        const finalDueDate = dueDate ? new Date(dueDate) : null;
+        
+        // Validate required fields
+        if (!invoiceNumber || invoiceNumber.trim() === '') {
+          toast({ title: 'Erro', description: 'Número da fatura é obrigatório.', variant: 'destructive' });
+          return;
+        }
+        
         const payload: any = {
           document_type: docType,
-          invoice_number: invoiceNumber,
+          billing_number: invoiceNumber.trim(),
           client_id: selectedClientId,
           client_name: clientDetails.name ?? null,
           client_nif: clientDetails.nif ?? null,
           client_address: clientDetails.address ?? null,
           client_province: clientDetails.province ?? null,
-          issue_date: issueDate ? new Date(issueDate).toISOString() : new Date().toISOString(),
-          due_date: dueDate ? new Date(dueDate).toISOString() : null,
-          observations,
+          issue_date: finalIssueDate.toISOString(),
+          due_date: finalDueDate ? finalDueDate.toISOString() : null,
+          observations: observations || '',
           iva_rate: ivaRate,
           apply_retention: applyRetention,
           items: items.map(i => ({ id: i.id, description: i.description, quantity: i.quantity, price: i.price, discount: i.discount })),
@@ -146,17 +158,112 @@ export default function BillingPage() {
           status: 'Emitida',
           created_at: new Date().toISOString(),
         };
-        Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+        
+        // Remove undefined values but keep null values
+        Object.keys(payload).forEach(k => {
+          if (payload[k] === undefined) {
+            delete payload[k];
+          }
+        });
+        
+        console.log('Saving invoice with payload:', JSON.stringify(payload, null, 2));
+        
         const { data, error } = await supabase
-          .from('invoices')
+          .from('billing')
           .insert(payload)
-          .select('id, invoice_number')
+          .select('id, billing_number')
           .single();
-        if (error) throw error;
-        toast({ title: 'Fatura salva', description: `Documento ${data?.invoice_number || invoiceNumber} gravado com sucesso.` });
+          
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
+        
+        console.log('Invoice saved successfully:', data);
+        toast({ title: 'Fatura salva', description: `Documento ${data?.billing_number || invoiceNumber} gravado com sucesso.` });
+        
       } catch (err: any) {
-        console.error('Erro ao salvar fatura no Supabase', err);
-        toast({ title: 'Erro ao salvar', description: err?.message || 'Não foi possível gravar a fatura no Supabase.', variant: 'destructive' });
+        console.group('🚨 BILLING SAVE ERROR DETAILS');
+        console.error('Error type:', typeof err);
+        console.error('Error constructor:', err?.constructor?.name);
+        console.error('Error keys:', Object.keys(err || {}));
+        
+        // Create a comprehensive error object that can be properly logged
+        const comprehensiveError = {
+          type: typeof err,
+          constructor: err?.constructor?.name,
+          message: err?.message || 'No message',
+          code: err?.code || 'No code',
+          details: err?.details || 'No details',
+          hint: err?.hint || 'No hint',
+          stack: err?.stack || 'No stack',
+          // Try to capture all enumerable properties
+          enumerableProps: {},
+          // Try to capture all own properties
+          ownProps: {}
+        };
+        
+        // Capture enumerable properties
+        if (err) {
+          for (const key in err) {
+            try {
+              comprehensiveError.enumerableProps[key] = err[key];
+            } catch (e) {
+              comprehensiveError.enumerableProps[key] = '[Cannot access]';
+            }
+          }
+          
+          // Capture own properties
+          Object.getOwnPropertyNames(err).forEach(key => {
+            try {
+              comprehensiveError.ownProps[key] = err[key];
+            } catch (e) {
+              comprehensiveError.ownProps[key] = '[Cannot access]';
+            }
+          });
+        }
+        
+        console.error('Comprehensive error object:', JSON.stringify(comprehensiveError, null, 2));
+        console.groupEnd();
+        
+        // Handle different error formats from Supabase
+        let errorMessage = 'Não foi possível gravar a fatura no Supabase.';
+        let errorCode = err?.code || 'UNKNOWN';
+        
+        // Special handling for cases where error object appears empty
+        if (!err || (typeof err === 'object' && Object.keys(err).length === 0)) {
+          errorMessage = 'Erro desconhecido ao salvar fatura. Por favor, tente novamente.';
+          errorCode = 'EMPTY_ERROR';
+        }
+        
+        if (err?.code === '42501') {
+          errorMessage = 'Permissão negada: você não tem autorização para criar faturas. Contacte o administrador do sistema.';
+        } else if (err?.code === 'PGRST205') {
+          errorMessage = 'Tabela de faturas não encontrada. Contacte o administrador do sistema.';
+        } else if (err?.code === '23502') {
+          // Not null constraint violation
+          const columnName = err?.details?.match(/column "([^"]+)"/)?.[1] || 'campo desconhecido';
+          errorMessage = `Erro: O campo "${columnName}" é obrigatório.`;
+        } else if (err?.message?.includes('billing')) {
+          errorMessage = 'Erro na base de dados: tabela de faturas não está disponível.';
+        } else if (err?.message) {
+          errorMessage = `Erro: ${err.message}`;
+        } else if (typeof err === 'string') {
+          errorMessage = `Erro: ${err}`;
+        } else if (err instanceof Error) {
+          errorMessage = `Erro: ${err.message}`;
+        }
+        
+        console.error('Final error message:', errorMessage);
+        console.error('Error code:', errorCode);
+        console.groupEnd();
+        
+        toast({ 
+          title: 'Erro ao salvar fatura', 
+          description: errorMessage, 
+          variant: 'destructive',
+          duration: 10000
+        });
       }
     }
 

@@ -77,9 +77,12 @@ const ReportSection = ({ title, dateRange, data }: {title: string, dateRange?: D
     );
 }
 
+function isMultiReportDataArray(d: ReportData | MultiReportData[]): d is MultiReportData[] {
+  return Array.isArray(d) && d.length > 0 && typeof (d as any)[0] === 'object' && 'title' in (d as any)[0] && 'data' in (d as any)[0];
+}
+
 export function ReportsPrintLayout({ title, dateRange, data }: ReportsPrintLayoutProps) {
-  
-  const isGeneral = Array.isArray(data);
+  const isGeneral = isMultiReportDataArray(data);
   const dateString = dateRange?.from ? (
     dateRange.to ? 
     `De ${format(dateRange.from, "dd/MM/yyyy", { locale: pt })} a ${format(dateRange.to, "dd/MM/yyyy", { locale: pt })}`
@@ -107,7 +110,9 @@ export function ReportsPrintLayout({ title, dateRange, data }: ReportsPrintLayou
 
             <main className="flex-grow space-y-4">
                  {isGeneral ? (
-                    data.map((report, index) => <ReportSection key={index} title={report.title} dateRange={dateRange} data={report.data} />)
+                    (data as MultiReportData[]).map((report, index) => (
+                      <ReportSection key={index} title={report.title} dateRange={dateRange} data={report.data} />
+                    ))
                  ) : (
                     <ReportSection title={title} dateRange={dateRange} data={data as ReportData} />
                  )}

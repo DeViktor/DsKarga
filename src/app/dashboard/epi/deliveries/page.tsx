@@ -10,8 +10,17 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { FileText, Loader2, Truck } from 'lucide-react';
+import { FileText, Loader2, Truck, X } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -23,7 +32,7 @@ import {
 import { EpiDeliveryDialog } from '@/components/dashboard/epi-delivery-dialog';
 import { format } from 'date-fns';
 import { useWorkers } from '@/hooks/use-workers';
-import { type Worker } from '@/app/dashboard/workers/page';
+import type { Worker } from '@/types/worker';
 import { EpiItem, useEpiItems } from '@/hooks/use-epis';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -43,6 +52,8 @@ export interface EpiDelivery {
 
 export default function EpiDeliveriesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedDelivery, setSelectedDelivery] = useState<EpiDelivery | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const { workers, loading: workersLoading } = useWorkers();
   const { epis, loading: episLoading } = useEpiItems();
   const [deliveries, setDeliveries] = useState<EpiDelivery[]>([]);
@@ -52,7 +63,7 @@ export default function EpiDeliveriesPage() {
     let isMounted = true;
     async function fetchFrom(table: string) {
       const supabase = getSupabaseClient();
-      const res = await supabase.from(table).select('*').order('date', { ascending: false });
+      const res = await supabase.from(table).select('*').order('delivery_date', { ascending: false });
       if (res.error) throw new Error(res.error.message || `Falha ao ler ${table}`);
       return (res.data || []) as any[];
     }
@@ -69,13 +80,13 @@ export default function EpiDeliveriesPage() {
           }
         }
         const normalized = rows.map((d: any) => ({
-          id: String(d.id ?? d.uuid ?? `${d.worker_id}-${d.epi_id}-${d.date}`),
+          id: String(d.id ?? d.uuid ?? `${d.worker_id}-${d.epi_id}-${d.delivery_date ?? d.date}`),
           workerId: String(d.worker_id ?? d.workerId ?? ''),
           workerName: d.worker_name ?? d.workerName ?? '',
           epiId: String(d.epi_id ?? d.epiId ?? ''),
           epiName: d.epi_name ?? d.epiName ?? '',
           quantity: Number(d.quantity ?? 0),
-          date: d.date ? new Date(d.date) : new Date(),
+          date: (d.delivery_date || d.date) ? new Date(d.delivery_date ?? d.date) : new Date(),
           responsible: d.responsible ?? 'Admin',
         })) as EpiDelivery[];
         if (isMounted) setDeliveries(normalized);
@@ -96,6 +107,11 @@ export default function EpiDeliveriesPage() {
   
   const addDeliveryToHistory = (delivery: EpiDelivery) => {
     setDeliveries(prev => [delivery, ...prev]);
+  };
+
+  const handleViewDetails = (delivery: EpiDelivery) => {
+    setSelectedDelivery(delivery);
+    setDetailsDialogOpen(true);
   };
 
   return (
@@ -143,8 +159,8 @@ export default function EpiDeliveriesPage() {
                           <TableCell>{delivery.quantity}x {delivery.epiName}</TableCell>
                           <TableCell>{delivery.responsible || 'Admin'}</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="outline" size="sm">
-                                <FileText className="mr-2 h-3 w-3" /> Termo
+                            <Button variant="outline" size="sm" onClick={() => handleViewDetails(delivery)}>
+                                <FileText className="mr-2 h-3 w-3" /> Ver Detalhes
                             </Button>
                           </TableCell>
                       </TableRow>
@@ -161,6 +177,80 @@ export default function EpiDeliveriesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delivery Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-headline">Detalhes da Entrega</DialogTitle>
+            <DialogDescription>
+              Informações completas sobre a entrega de EPI
+            </DialogDescription>
+          </DialogHeader>
+          {selectedDelivery && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="font-medium text-muted-foreground">Data</p>
+                  <p>{format(selectedDelivery.date, 'dd/MM/yyyy')}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-muted-foreground">Responsável</p>
+                  <p>{selectedDelivery.responsible || 'Admin'}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-muted-foreground">Colaborador</p>
+                  <p>{selectedDelivery.workerName}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-muted-foreground">Equipamento</p>
+                  <p>{selectedDelivery.epiName}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-muted-foreground">Quantidade</p>
+                  <p>{selectedDelivery.quantity} unidades</p>
+                </div>
+                <div>
+                  <p className="font-medium text-muted-foreground">ID da Entrega</p>
+                  <p className="text-xs font-mono">{selectedDelivery.id}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">
+                <X className="mr-2 h-4 w-4" /> Fechar
+              </Button>
+            </DialogClose>
+            <Button variant="outline" onClick={() => {
+              // Print functionality
+              const printContent = `
+                <div style="padding: 20px; font-family: Arial, sans-serif;">
+                  <h2 style="text-align: center; margin-bottom: 20px;">Termo de Entrega de EPI</h2>
+                  <p><strong>Data:</strong> ${format(selectedDelivery?.date || new Date(), 'dd/MM/yyyy')}</p>
+                  <p><strong>Colaborador:</strong> ${selectedDelivery?.workerName}</p>
+                  <p><strong>Equipamento:</strong> ${selectedDelivery?.epiName}</p>
+                  <p><strong>Quantidade:</strong> ${selectedDelivery?.quantity} unidades</p>
+                  <p><strong>Responsável:</strong> ${selectedDelivery?.responsible || 'Admin'}</p>
+                  <hr style="margin: 20px 0;" />
+                  <p style="text-align: center; font-size: 12px; color: #666;">
+                    ID da Entrega: ${selectedDelivery?.id}
+                  </p>
+                </div>
+              `;
+              const printWindow = window.open('', '_blank');
+              if (printWindow) {
+                printWindow.document.write(printContent);
+                printWindow.document.close();
+                printWindow.print();
+              }
+            }}>
+              <FileText className="mr-2 h-4 w-4" /> Imprimir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
