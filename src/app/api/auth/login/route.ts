@@ -53,9 +53,9 @@ export async function POST(req: Request) {
     const res = NextResponse.json({ ok: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
     res.cookies.set('sb-auth-token', token, { httpOnly: true, sameSite: 'strict', path: '/', maxAge: 3600 });
     res.cookies.set('sb-auth-iat', String(iat), { httpOnly: true, sameSite: 'strict', path: '/', maxAge: 3600 });
+    res.cookies.set('sb-auth-user', String(user.id || user.email || ''), { httpOnly: true, sameSite: 'strict', path: '/', maxAge: 3600 });
     return res;
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Falha no login' }, { status: 500 });
   }
 }
-

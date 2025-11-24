@@ -46,24 +46,26 @@ export function middleware(request: NextRequest) {
   
   // Get the authentication token and issued-at from cookies (Supabase-based session)
   const authToken = request.cookies.get('sb-auth-token')?.value;
+  const authUser = request.cookies.get('sb-auth-user')?.value;
   const authIatStr = request.cookies.get('sb-auth-iat')?.value;
   const authIat = authIatStr ? Number(authIatStr) : 0;
   const now = Math.floor(Date.now() / 1000);
   const isExpired = !authIat || (now - authIat > 3600);
   
   // If trying to access a protected route without authentication
-  if (isProtectedRoute && (!authToken || isExpired)) {
+  if (isProtectedRoute && (!authToken || !authUser || isExpired)) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirectTo', pathname);
     const res = NextResponse.redirect(loginUrl);
     // Clear expired cookies
     res.cookies.set('sb-auth-token', '', { path: '/', maxAge: 0 });
     res.cookies.set('sb-auth-iat', '', { path: '/', maxAge: 0 });
+    res.cookies.set('sb-auth-user', '', { path: '/', maxAge: 0 });
     return res;
   }
   
   // If trying to access login page while already authenticated
-  if (isPublicRoute && authToken && !isExpired && pathname === '/login') {
+  if (isPublicRoute && authToken && authUser && !isExpired && pathname === '/login') {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
   
