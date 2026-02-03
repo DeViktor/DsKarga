@@ -1,23 +1,21 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { signOut } from 'firebase/auth';
-import { useAuth } from '@/firebase/provider';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
 
 export function LogoutButton() {
   const router = useRouter();
-  const auth = useAuth();
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
-      // Clear the authentication cookie
-      document.cookie = 'firebase-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC';
-      router.push('/login');
+      await fetch('/api/auth/logout', { method: 'POST' });
+      // Force full page reload to clear client state and ensure middleware check
+      window.location.href = '/login';
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
+      // Fallback
+      window.location.href = '/login';
     }
   };
 

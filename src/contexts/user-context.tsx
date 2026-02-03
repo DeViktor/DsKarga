@@ -1,9 +1,6 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore, useAuth } from '@/firebase/provider';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 export type UserProfile = {
   id: string;
@@ -17,66 +14,38 @@ export type UserProfile = {
 type UserContextType = {
   profile: UserProfile | null;
   loading: boolean;
+  refreshProfile: () => Promise<void>;
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const { user, loading: authLoading } = useUser();
-  const firestore = useFirestore();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user || !firestore) {
-      setProfile(null);
-      setLoading(authLoading);
-      return;
-    }
-
-    // Try to get user profile from Firestore
-    const userRef = doc(firestore, 'users', user.uid);
-    
-    const unsubscribe = onSnapshot(userRef, (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setProfile({
-          id: user.uid,
-          name: data.name || user.displayName || 'Usuário',
-          email: user.email || '',
-          role: data.role || 'Usuário',
-          avatar: data.avatar || user.photoURL || undefined,
-          department: data.department || undefined,
-        });
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data.user);
       } else {
-        // Create a basic profile if no Firestore document exists
-        setProfile({
-          id: user.uid,
-          name: user.displayName || 'Usuário',
-          email: user.email || '',
-          role: 'Usuário',
-          avatar: user.photoURL || undefined,
-        });
+        setProfile(null);
       }
+    } catch (error) {
+      console.error('Erro ao carregar perfil:', error);
+      setProfile(null);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      console.error('Erro ao carregar perfil do usuário:', error);
-      // Fallback to basic profile
-      setProfile({
-        id: user.uid,
-        name: user.displayName || 'Usuário',
-        email: user.email || '',
-        role: 'Usuário',
-        avatar: user.photoURL || undefined,
-      });
-      setLoading(false);
-    });
+    }
+  };
 
-    return () => unsubscribe();
-  }, [user, firestore, authLoading]);
+  useEffect(() => {
+    fetchProfile();
+  }, []);
 
   return (
-    <UserContext.Provider value={{ profile, loading }}>
+    <UserContext.Provider value={{ profile, loading, refreshProfile: fetchProfile }}>
       {children}
     </UserContext.Provider>
   );

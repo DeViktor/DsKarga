@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore } from '@/firebase/provider';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 export type ActivityType = {
   id: string;
@@ -11,7 +10,7 @@ export type ActivityType = {
   userAvatar: string;
   action: string;
   target: string;
-  targetType: 'worker' | 'service' | 'client' | 'invoice' | 'payment' | 'attendance' | 'accident' | 'epi' | 'purchasing' | 'accounting' | 'supervision' | 'candidate';
+  targetType: string;
   timestamp: Date;
   metadata?: {
     [key: string]: any;
@@ -19,67 +18,81 @@ export type ActivityType = {
 };
 
 export function useRecentActivities(limitCount: number = 10) {
-  const firestore = useFirestore();
   const [activities, setActivities] = useState<ActivityType[]>([]);
   const [loading, setLoading] = useState(true);
-
+  
   useEffect(() => {
-    if (!firestore) return;
+    const supabase = getSupabaseClient();
+    
+    const fetchActivities = async () => {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(limitCount);
 
-    const activitiesRef = collection(firestore, 'activities');
-    const q = query(activitiesRef, orderBy('timestamp', 'desc'), limit(limitCount));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const activitiesData: ActivityType[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        activitiesData.push({
-          id: doc.id,
-          user: data.user,
-          userId: data.userId,
-          userAvatar: data.userAvatar,
-          action: data.action,
-          target: data.target,
-          targetType: data.targetType,
-          timestamp: data.timestamp?.toDate() || new Date(),
-          metadata: data.metadata || {},
-        });
-      });
-      setActivities(activitiesData);
+      if (error) {
+        console.error('Erro ao carregar atividades:', error);
+      } else if (data) {
+        setActivities(data.map((item: any) => ({
+          id: item.id,
+          user: item.user,
+          userId: item.userId,
+          userAvatar: item.userAvatar || item.user_avatar,
+          action: item.action,
+          target: item.target,
+          targetType: item.targetType,
+          timestamp: new Date(item.timestamp),
+          metadata: item.metadata
+        })));
+      }
       setLoading(false);
-    }, (error) => {
-      console.error('Erro ao carregar atividades:', error);
-      setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
-  }, [firestore, limitCount]);
+    fetchActivities();
+    
+    // Simple realtime subscription
+    const channel = supabase
+      .channel('activities_list_changes')
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'activities' }, 
+        (payload) => {
+             fetchActivities(); // Simple re-fetch on change
+        }
+      )
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [limitCount]);
 
   return { activities, loading };
 }
 
 export async function logActivity(
-  firestore: any,
   userId: string,
   userName: string,
   userAvatar: string,
   action: string,
   target: string,
-  targetType: ActivityType['targetType'],
+  targetType: string,
   metadata?: { [key: string]: any }
 ) {
+  const supabase = getSupabaseClient();
   try {
-    const activitiesRef = collection(firestore, 'activities');
-    await addDoc(activitiesRef, {
+    const { error } = await supabase.from('activities').insert({
       user: userName,
       userId,
       userAvatar,
       action,
       target,
       targetType,
-      timestamp: serverTimestamp(),
+      timestamp: new Date().toISOString(),
       metadata: metadata || {},
     });
+    
+    if (error) throw error;
   } catch (error) {
     console.error('Erro ao registrar atividade:', error);
   }

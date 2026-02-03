@@ -1,27 +1,24 @@
 'use client';
 
-import { logActivity as logActivityToFirebase } from '@/hooks/use-activities';
+import { logActivity as logActivityToSupabase } from '@/hooks/use-activities';
 import { useUserProfile } from '@/contexts/user-context';
-import { useFirestore } from '@/firebase/provider';
 
 export function useActivityLogger() {
   const { profile } = useUserProfile();
-  const firestore = useFirestore();
 
   const logActivity = async (
     action: string,
     target: string,
-    targetType: Parameters<typeof logActivityToFirebase>[5],
+    targetType: Parameters<typeof logActivityToSupabase>[5],
     metadata?: { [key: string]: any }
   ) => {
-    if (!profile || !firestore) {
-      console.warn('Não foi possível registrar atividade: usuário ou Firestore não disponível');
+    if (!profile) {
+      console.warn('Não foi possível registrar atividade: usuário não disponível');
       return;
     }
 
     try {
-      await logActivityToFirebase(
-        firestore,
+      await logActivityToSupabase(
         profile.id,
         profile.name,
         profile.avatar || profile.name.charAt(0).toUpperCase(),
