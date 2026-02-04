@@ -1,10 +1,9 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams, notFound, useRouter } from 'next/navigation';
-import { useFirestore, useDoc } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -64,14 +63,69 @@ export default function SupervisionReportDetailPage() {
     const params = useParams();
     const router = useRouter();
     const id = params.id as string;
+    const [report, setReport] = useState<SupervisionReport | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    const firestore = useFirestore();
-    const reportRef = useMemo(() => {
-        if (!firestore || !id) return null;
-        return doc(firestore, 'supervision-reports', id);
-    }, [firestore, id]);
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchReport() {
+            setLoading(true);
+            try {
+                const supabase = getSupabaseClient();
+                const { data, error } = await supabase
+                    .from('supervision_reports')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
 
-    const { data: report, loading } = useDoc<SupervisionReport>(reportRef);
+                if (error) throw error;
+
+                if (data && isMounted) {
+                    const normalized: SupervisionReport = {
+                        id: data.id,
+                        supervisor: data.supervisor,
+                        reportDate: data.report_date,
+                        client: data.client,
+                        activity: data.activity,
+                        weather: data.weather,
+                        staffAllocated: data.staff_allocated,
+                        staffAbsences: data.staff_absences,
+                        staffNormalHours: data.staff_normal_hours,
+                        staffExtraHours: data.staff_extra_hours,
+                        staffReplacements: data.staff_replacements,
+                        staffIssues: data.staff_issues,
+                        prodGoal: data.prod_goal,
+                        prodResult: data.prod_result,
+                        prodProductiveHours: data.prod_productive_hours,
+                        prodNonProductiveHours: data.prod_non_productive_hours,
+                        prodJustification: data.prod_justification,
+                        safetyEpi: data.safety_epi,
+                        safetyBriefing: data.safety_briefing,
+                        safetyIncidents: data.safety_incidents,
+                        safetyUnsafeConditions: data.safety_unsafe_conditions,
+                        clientFeedback: data.client_feedback,
+                        clientNeeds: data.client_needs,
+                        pendingIssues: data.pending_issues,
+                        highlights: data.highlights,
+                        recommendations: data.recommendations,
+                    };
+                    setReport(normalized);
+                }
+            } catch (err) {
+                console.error('Erro ao carregar relatório:', err);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
+
+        if (id) {
+            fetchReport();
+        }
+
+        return () => {
+            isMounted = false;
+        };
+    }, [id]);
 
     const handlePrint = () => {
         window.print();

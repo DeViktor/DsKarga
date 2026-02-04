@@ -2,10 +2,8 @@
 'use client';
 
 import { Logo } from "@/components/icons";
-import { type PurchaseRequest } from "@/firebase/firestore/purchasing";
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { Timestamp } from 'firebase/firestore';
 import {
   Table,
   TableBody,
@@ -14,6 +12,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+// Define interface locally or import from a shared types file
+// Adapting to match the normalized data from Supabase (where dates are Date objects)
+interface PurchaseRequest {
+    id: string;
+    requestNumber: string;
+    requester: string;
+    department: string;
+    justification: string;
+    items: any[];
+    status: string;
+    date: Date | null;
+    createdAt: Date | null;
+}
 
 interface PrintLayoutProps {
     request: PurchaseRequest;
@@ -44,8 +56,8 @@ export function PurchaseRequestPrintLayout({ request }: PrintLayoutProps) {
                 <div className="grid grid-cols-3 gap-4">
                     <div><p className="font-bold">Requisitante:</p><p>{request.requester}</p></div>
                     <div><p className="font-bold">Departamento:</p><p>{request.department}</p></div>
-                    <div><p className="font-bold">Data da Solicitação:</p><p>{request.createdAt ? format(request.createdAt.toDate(), 'dd/MM/yyyy') : 'N/A'}</p></div>
-                     <div><p className="font-bold">Data da Necessidade:</p><p>{request.date ? format((request.date as unknown as Timestamp).toDate(), 'dd/MM/yyyy') : 'N/A'}</p></div>
+                    <div><p className="font-bold">Data da Solicitação:</p><p>{request.createdAt ? format(request.createdAt, 'dd/MM/yyyy') : 'N/A'}</p></div>
+                     <div><p className="font-bold">Data da Necessidade:</p><p>{request.date ? format(request.date, 'dd/MM/yyyy') : 'N/A'}</p></div>
                 </div>
             </section>
             

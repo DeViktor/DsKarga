@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -32,11 +30,21 @@ import { ReportsPrintLayout } from '@/components/dashboard/reports-print-layout'
 import { useWorkers } from '@/hooks/use-workers';
 import { useServices } from '@/hooks/use-services';
 import { useEpiItems } from '@/hooks/use-epis';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query } from 'firebase/firestore';
-import { type PurchaseOrder } from '@/firebase/firestore/purchasing';
 import { type Transaction } from '@/components/dashboard/cash-flow/transaction-dialog';
 import { getSupabaseClient } from '@/lib/supabase/client';
+
+// Interfaces
+interface PurchaseOrder {
+    id: string;
+    orderNumber: string;
+    requestNumber: string;
+    requestId: string;
+    supplierId?: string;
+    supplierName?: string;
+    status: 'Pendente' | 'Entregue' | 'Cancelado' | 'Atrasado';
+    items: any[];
+    createdAt: Date;
+}
 
 // Transações reais do Supabase
 function useTransactions(date: DateRange | undefined) {
@@ -78,6 +86,56 @@ function useTransactions(date: DateRange | undefined) {
   return { transactions, loading };
 }
 
+function usePurchaseOrders() {
+    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchPurchaseOrders() {
+            setLoading(true);
+            try {
+                const supabase = getSupabaseClient();
+                const { data, error } = await supabase
+                    .from('purchase_orders')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) {
+                     // Se a tabela não existir ou erro, apenas logar e retornar vazio para não quebrar a UI
+                     console.warn('Erro ao buscar ordens de compra (pode não estar migrado ainda):', error.message);
+                     if (isMounted) setPurchaseOrders([]);
+                     return;
+                }
+
+                const normalized = (data || []).map((p: any) => ({
+                    id: String(p.id),
+                    orderNumber: p.order_number ?? p.orderNumber ?? '',
+                    requestNumber: p.request_number ?? p.requestNumber ?? '',
+                    requestId: p.request_id ?? p.requestId ?? '',
+                    supplierId: p.supplier_id ?? p.supplierId,
+                    supplierName: p.supplier_name ?? p.supplierName,
+                    status: (p.status ?? 'Pendente') as PurchaseOrder['status'],
+                    items: p.items ?? [],
+                    createdAt: p.created_at ? new Date(p.created_at) : new Date(),
+                })) as PurchaseOrder[];
+
+                if (isMounted) setPurchaseOrders(normalized);
+            } catch (err) {
+                console.error('Erro ao carregar ordens de compra do Supabase', err);
+                if (isMounted) setPurchaseOrders([]);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
+
+        fetchPurchaseOrders();
+        return () => { isMounted = false; };
+    }, []);
+
+    return { purchaseOrders, loading };
+}
+
 
 type ReportData = { Categoria: string, Valor: string | number }[];
 type MultiReportData = { title: string, data: ReportData };
@@ -105,7 +163,6 @@ function downloadGeneralXLSX(allData: Record<string, ReportData>) {
 }
 
 export default function ReportsPage() {
-    const firestore = useFirestore();
     const [date, setDate] = useState<DateRange | undefined>({
         from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
         to: addDays(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0), 0),
@@ -118,8 +175,7 @@ export default function ReportsPage() {
     const { services, loading: servicesLoading } = useServices();
     const { epis, loading: episLoading } = useEpiItems();
     
-    const poQuery = useMemo(() => firestore ? query(collection(firestore, 'purchase-orders')) : null, [firestore]);
-    const { data: purchaseOrders, loading: poLoading } = useCollection<PurchaseOrder>(poQuery);
+    const { purchaseOrders, loading: poLoading } = usePurchaseOrders();
 
     const { transactions, loading: transactionsLoading } = useTransactions(date);
 
@@ -419,7 +475,7 @@ export default function ReportsPage() {
             </CardFooter>
         </Card>
       </div>
-    )}
+      )}
     </>
   );
 }

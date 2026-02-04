@@ -22,7 +22,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, FileText, Loader2 } from "lucide-react";
-import { Timestamp } from 'firebase/firestore';
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useRouter } from "next/navigation";

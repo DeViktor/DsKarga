@@ -3,7 +3,6 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, useRouter, notFound } from 'next/navigation';
-// import { Timestamp } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 // Removed actions import; using Supabase client directly
 import { getSupabaseClient } from '@/lib/supabase/client';
@@ -233,7 +232,7 @@ export default function PurchaseRequestDetailPage() {
         if (!request) return;
         const dataToExport = [
             { Chave: 'Nº Solicitação', Valor: request.requestNumber },
-            { Chave: 'Data', Valor: request.createdAt ? format(request.createdAt.toDate(), 'dd/MM/yyyy') : 'N/A' },
+            { Chave: 'Data', Valor: request.createdAt ? format(request.createdAt, 'dd/MM/yyyy') : 'N/A' },
             { Chave: 'Departamento', Valor: request.department },
             { Chave: 'Requisitante', Valor: request.requester },
             { Chave: 'Estado', Valor: request.status },
