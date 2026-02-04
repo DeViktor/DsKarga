@@ -2,13 +2,12 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  // Obter cookies de autenticação definidos no login/route.ts
+  // Obter cookies de autenticação definidos no login
   const authToken = request.cookies.get('sb-auth-token')?.value;
   const authUser = request.cookies.get('sb-auth-user')?.value;
   const authIat = request.cookies.get('sb-auth-iat')?.value;
 
   // Verificar validade do token (1 hora = 3600 segundos)
-  // Nota: Os cookies já têm maxAge=3600, mas verificamos o iat por segurança extra
   const currentTimestamp = Math.floor(Date.now() / 1000);
   const isValid = 
     authToken && 
