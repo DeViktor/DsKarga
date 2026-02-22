@@ -39,7 +39,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Gavel, Hand, User, Edit, Upload, ArrowLeft, Briefcase, CalendarClock, Star, LogOut, Download, Clock, CheckCircle, PlusCircle, View, Camera, Loader2 } from "lucide-react";
+import { FileText, Gavel, Hand, User, Edit, Upload, ArrowLeft, Briefcase, CalendarClock, Star, LogOut, Download, Clock, CheckCircle, PlusCircle, Eye, Camera, Loader2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -920,7 +920,7 @@ export default function WorkerDetailPage() {
                                             <TableCell>{item.actionTaken}</TableCell>
                                             <TableCell className="text-right">
                                                 <Button variant="outline" size="sm" onClick={() => handleViewDisciplinary(item)}>
-                                                    <View className="mr-2 h-3 w-3" /> Ver/Baixar
+                                                    <Eye className="mr-2 h-3 w-3" /> Ver/Baixar
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
