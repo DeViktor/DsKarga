@@ -92,7 +92,7 @@ const payrollHistory = [
     { period: 'Maio 2024', status: 'Pago' },
 ];
 
-interface Document {
+interface WorkerDocument {
     id: number;
     name: string;
     expiry?: string;
@@ -160,7 +160,7 @@ export default function WorkerDetailPage() {
   
   const [performanceHistory, setPerformanceHistory] = useState(initialPerformanceHistory);
   
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<WorkerDocument[]>([]);
   const [newDocument, setNewDocument] = useState<{name: string, expiry?: string, notes?: string, file?: File}>({ name: '' });
   const [documentExpires, setDocumentExpires] = useState<'nao' | 'sim'>('nao');
 
@@ -384,7 +384,7 @@ export default function WorkerDetailPage() {
         });
         return;
     }
-    const doc: Document = {
+    const doc: WorkerDocument = {
         id: Date.now(),
         name: newDocument.name,
         expiry: documentExpires === 'sim' ? newDocument.expiry : undefined,
