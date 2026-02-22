@@ -303,16 +303,17 @@ export default function WorkerDetailPage() {
 
       const publicUrl = publicData.publicUrl;
 
-      try {
-        const { error: dbError } = await getSupabaseClient()
-          .from('workers')
-          .update({ photo_url: publicUrl, updated_at: new Date().toISOString() })
-          .eq('id', worker.id);
-        if (dbError) {
-          console.warn('Falha ao atualizar photo_url no workers:', dbError);
-        }
-      } catch (dbErr) {
-        console.warn('Erro ao persistir URL da foto:', dbErr);
+      const { error: dbError } = await supabase
+        .from('workers')
+        .update({ photo_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq('id', worker.id);
+      if (dbError) {
+        toast({
+          title: "Erro ao salvar no banco",
+          description: dbError.message.includes("column") ? "Coluna photo_url pode não existir." : "Verifique as políticas (RLS) e permissões.",
+          variant: "destructive",
+        });
+        return;
       }
 
       setProfilePic(publicUrl);
