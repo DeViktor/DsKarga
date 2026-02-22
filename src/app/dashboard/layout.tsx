@@ -28,14 +28,14 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Logo } from '@/components/icons';
-import { LogoutButton } from '@/components/logout-button';
+import { Logo } from '@/components/dashboard/header';
+import { LogoutButton } from '@/components/dashboard/logout-button';
 import { ReactNode, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 
 const navItems = [
-  { href: '/dashboard', icon: Home, label: 'Painel' },
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Visão Geral' },
   { 
     id: 'services',
     icon: Briefcase, 

@@ -130,6 +130,7 @@ export default function WorkerDetailPage() {
           baseSalary: Number(w.base_salary ?? w.baseSalary ?? 0),
           contractStatus: (w.status ?? 'Ativo') as Worker['contractStatus'],
           type: (w.type ?? 'Eventual') as Worker['type'],
+          photoUrl: w.photo_url ?? w.photoUrl ?? undefined,
         })) as Worker[];
 
         setWorkers(normalized);
@@ -172,7 +173,6 @@ export default function WorkerDetailPage() {
     actionTaken: ''
   });
   const [currentDisciplinaryAction, setCurrentDisciplinaryAction] = useState<DisciplinaryAction | null>(null);
-  
   const [profilePic, setProfilePic] = useState(`https://picsum.photos/seed/${id}/200/200`);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -235,6 +235,7 @@ export default function WorkerDetailPage() {
           baseSalary: Number(data.base_salary ?? data.baseSalary ?? 0),
           contractStatus: (data.contract_status ?? 'Ativo') as Worker['contractStatus'],
           type: (data.type ?? 'Eventual') as Worker['type'],
+          photoUrl: data.photo_url ?? undefined,
         };
         setWorker(normalized);
       }
@@ -262,18 +263,68 @@ export default function WorkerDetailPage() {
     notFound();
   }
   
-  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    if (worker) {
+      setProfilePic(worker.photoUrl || `https://picsum.photos/seed/${worker.id}/200/200`);
+    }
+  }, [worker]);
+
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfilePic(reader.result as string);
-         toast({
-          title: "Foto de Perfil Atualizada",
-          description: "A nova foto foi carregada nesta sessão.",
-        });
-      };
-      reader.readAsDataURL(file);
+    if (!file || !worker) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Tipo de ficheiro inválido", description: "Selecione uma imagem.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Imagem muito grande", description: "Tamanho máximo permitido é 5MB.", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+      const bucket = process.env.NEXT_PUBLIC_SUPABASE_WORKER_PHOTOS_BUCKET || 'worker-photos';
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${worker.id}/${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase
+        .storage
+        .from(bucket)
+        .upload(path, file, { cacheControl: '3600', upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicData } = supabase
+        .storage
+        .from(bucket)
+        .getPublicUrl(path);
+
+      const publicUrl = publicData.publicUrl;
+
+      try {
+        const { error: dbError } = await getSupabaseClient()
+          .from('workers')
+          .update({ photo_url: publicUrl, updated_at: new Date().toISOString() })
+          .eq('id', worker.id);
+        if (dbError) {
+          console.warn('Falha ao atualizar photo_url no workers:', dbError);
+        }
+      } catch (dbErr) {
+        console.warn('Erro ao persistir URL da foto:', dbErr);
+      }
+
+      setProfilePic(publicUrl);
+      setWorker(prev => prev ? { ...prev, photoUrl: publicUrl } as Worker : prev);
+      toast({ title: "Foto atualizada", description: "A foto foi enviada para o Supabase." });
+    } catch (err) {
+      console.error('Erro no upload da foto', err);
+      toast({
+        title: "Erro ao enviar foto",
+        description: "Verifique permissões do bucket e tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 

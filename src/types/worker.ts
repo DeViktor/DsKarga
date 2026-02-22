@@ -7,4 +7,5 @@ export interface Worker {
   baseSalary: number;
   contractStatus: 'Ativo' | 'Suspenso' | 'Concluído';
   type: 'Fixo' | 'Eventual';
+  photoUrl?: string;
 }
