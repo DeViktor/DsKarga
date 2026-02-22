@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { workers as staticWorkers } from "@/lib/data";
 import type { Worker } from "@/types/worker";
-import { notFound, useParams, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { DashboardHeader } from "@/components/dashboard/header";
 import {
   Card,
@@ -260,7 +260,14 @@ export default function WorkerDetailPage() {
   }
 
   if (!worker) {
-    notFound();
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-16">
+        <p className="text-lg font-medium">Trabalhador não encontrado</p>
+        <Button variant="outline" onClick={() => router.back()}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Retroceder
+        </Button>
+      </div>
+    );
   }
   
   useEffect(() => {
