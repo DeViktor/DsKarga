@@ -23,6 +23,7 @@ export interface Candidate {
   certifications?: string;
   experienceSummary?: string;
   status?: 'Pendente' | 'Em entrevista' | 'Contratado' | 'Rejeitado';
+  photoUrl?: string;
   createdAt?: any;
 }
 
@@ -60,6 +61,7 @@ export function useCandidates() {
           certifications: c.certifications ?? undefined,
           experienceSummary: c.experience_summary ?? c.experienceSummary ?? undefined,
           status: c.status ?? 'Pendente',
+          photoUrl: c.photo_url ?? c.photoUrl ?? undefined,
           createdAt: c.created_at ?? undefined,
         })) as Candidate[];
         if (isMounted) setCandidates(normalized);

@@ -36,6 +36,8 @@ export function useWorkers() {
           baseSalary: Number(w.base_salary ?? w.baseSalary ?? 0),
           contractStatus: (w.contract_status ?? 'Ativo') as Worker['contractStatus'],
           type: (w.type ?? 'Eventual') as Worker['type'],
+          photoUrl: w.photo_url ?? w.photoUrl ?? undefined,
+          updated_at: w.updated_at,
         })) as WorkerWithService[];
 
         // Enriquecer com alocação a serviços ativos, se disponível
