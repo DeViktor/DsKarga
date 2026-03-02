@@ -104,7 +104,7 @@ export default function WorkersPage() {
                   <Card key={worker.id} className="flex flex-col">
                     <CardHeader className="flex flex-col items-center text-center">
                       <Avatar className="w-16 h-16 mb-4">
-                        <AvatarImage src={`https://picsum.photos/seed/${worker.id}/100/100`} />
+                        <AvatarImage src={worker.photoUrl || `https://picsum.photos/seed/${worker.id}/100/100`} />
                         <AvatarFallback>{worker.name.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <CardTitle className="text-lg font-headline">{worker.name}</CardTitle>

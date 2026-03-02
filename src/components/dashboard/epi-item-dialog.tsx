@@ -44,7 +44,7 @@ interface EpiItemDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     item: EpiItem | null;
-    onSave: (id: string, data: ItemFormValues) => void;
+    onSave: (id: string | null, data: ItemFormValues) => void;
 }
 
 export function EpiItemDialog({ open, onOpenChange, item, onSave }: EpiItemDialogProps) {
@@ -53,23 +53,37 @@ export function EpiItemDialog({ open, onOpenChange, item, onSave }: EpiItemDialo
 
     const form = useForm<ItemFormValues>({
         resolver: zodResolver(itemSchema),
+        defaultValues: {
+            name: '',
+            category: '',
+            quantity: 0,
+            lowStockThreshold: 10,
+            location: '',
+            expiryDate: '',
+        }
     });
 
     useEffect(() => {
-        if (item) {
-            form.reset({
-                ...item,
-                expiryDate: item.expiryDate ? item.expiryDate.split('T')[0] : '', // Format for date input
-            });
-        } else {
-            form.reset({
-                name: '',
-                category: '',
-                quantity: 0,
-                lowStockThreshold: 10,
-                location: '',
-                expiryDate: '',
-            });
+        if (open) {
+            if (item) {
+                form.reset({
+                    name: item.name,
+                    category: item.category,
+                    quantity: item.quantity,
+                    lowStockThreshold: item.lowStockThreshold,
+                    location: item.location || '',
+                    expiryDate: item.expiryDate ? (new Date(item.expiryDate)).toISOString().split('T')[0] : '',
+                });
+            } else {
+                form.reset({
+                    name: '',
+                    category: '',
+                    quantity: 0,
+                    lowStockThreshold: 10,
+                    location: '',
+                    expiryDate: '',
+                });
+            }
         }
     }, [item, open, form]);
 
@@ -80,7 +94,7 @@ export function EpiItemDialog({ open, onOpenChange, item, onSave }: EpiItemDialo
                 await onSave(item.id, data);
             } else {
                 // Add new item - pass null as ID since Supabase will generate it
-                await onSave(null as any, data);
+                await onSave(null, data);
             }
             toast({ title: 'Sucesso!', description: item ? 'O item foi atualizado.' : 'O novo item foi adicionado.' });
             onOpenChange(false);

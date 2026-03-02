@@ -23,30 +23,45 @@ export function useRecentActivities(limitCount: number = 10) {
   
   useEffect(() => {
     const supabase = getSupabaseClient();
+    let isMounted = true;
     
     const fetchActivities = async () => {
-      const { data, error } = await supabase
-        .from('activities')
-        .select('*')
-        .order('timestamp', { ascending: false })
-        .limit(limitCount);
+      try {
+        const { data, error } = await supabase
+          .from('activities')
+          .select('*')
+          .order('created_at', { ascending: false }) // Use created_at instead of timestamp if timestamp doesn't exist
+          .limit(limitCount);
 
-      if (error) {
-        console.error('Erro ao carregar atividades:', error);
-      } else if (data) {
-        setActivities(data.map((item: any) => ({
-          id: item.id,
-          user: item.user,
-          userId: item.userId,
-          userAvatar: item.userAvatar || item.user_avatar,
-          action: item.action,
-          target: item.target,
-          targetType: item.targetType,
-          timestamp: new Date(item.timestamp),
-          metadata: item.metadata
-        })));
+        if (error) {
+           // Check if error is because table doesn't exist
+           if (error.code === '42P01') {
+             console.warn('Tabela activities não encontrada. Ignorando erro.');
+             if (isMounted) setActivities([]);
+             return;
+           }
+           throw error;
+        } 
+        
+        if (data && isMounted) {
+          setActivities(data.map((item: any) => ({
+            id: item.id,
+            user: item.user_name || item.user || 'Sistema',
+            userId: item.user_id || item.userId,
+            userAvatar: item.user_avatar || item.userAvatar,
+            action: item.action,
+            target: item.target,
+            targetType: item.target_type || item.targetType,
+            timestamp: new Date(item.created_at || item.timestamp || new Date()),
+            metadata: item.metadata
+          })));
+        }
+      } catch (err) {
+        console.error('Erro ao carregar atividades:', err);
+        if (isMounted) setActivities([]);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchActivities();
@@ -56,13 +71,14 @@ export function useRecentActivities(limitCount: number = 10) {
       .channel('activities_list_changes')
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'activities' }, 
-        (payload) => {
+        () => {
              fetchActivities(); // Simple re-fetch on change
         }
       )
       .subscribe();
       
     return () => {
+      isMounted = false;
       supabase.removeChannel(channel);
     };
   }, [limitCount]);

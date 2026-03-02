@@ -127,7 +127,7 @@ export default function PurchaseOrdersPage() {
                   <TableCell className="font-mono">{order.orderNumber}</TableCell>
                   <TableCell className="font-mono">{order.requestNumber}</TableCell>
                   <TableCell className="font-medium">{order.supplierName || 'A definir'}</TableCell>
-                  <TableCell>{(order.issueDate || order.createdAt) ? format(new Date(order.issueDate || order.createdAt), 'dd/MM/yyyy') : 'A processar...'}</TableCell>
+                  <TableCell>{(order.issueDate || order.createdAt) ? format(new Date(order.issueDate || order.createdAt || ''), 'dd/MM/yyyy') : 'A processar...'}</TableCell>
                   <TableCell>{typeof order.itemsCount === 'number' ? order.itemsCount : '-'}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>

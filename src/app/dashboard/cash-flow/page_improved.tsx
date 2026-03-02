@@ -155,7 +155,7 @@ export default function CashFlowPage() {
                         id: `journal-${j.id}`,
                         description: j.description || 'Lançamento Contábil',
                         amount: Number(j.total_amount) || 0,
-                        type: Number(j.total_amount) >= 0 ? 'receita' : 'despesa',
+                        type: (Number(j.total_amount) >= 0 ? 'receita' : 'despesa') as 'receita' | 'despesa',
                         category: 'Contabilidade',
                         date: j.entry_date ? new Date(j.entry_date) : new Date(),
                         source: 'journal_entries' as const,

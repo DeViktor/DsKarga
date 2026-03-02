@@ -314,6 +314,7 @@ export async function addWorkerSupabase(data: {
   baseSalary: number;
   contractStatus: 'Ativo' | 'Suspenso' | 'Concluído';
   type: 'Fixo' | 'Eventual';
+  photoUrl?: string;
 }) {
   const supabase = getSupabaseClient();
   const payload = {
@@ -324,6 +325,7 @@ export async function addWorkerSupabase(data: {
     base_salary: data.baseSalary,
     contract_status: data.contractStatus,
     type: data.type,
+    photo_url: data.photoUrl || null,
     created_at: new Date().toISOString(),
   };
   const { data: inserted, error } = await supabase
@@ -345,20 +347,27 @@ export async function updateWorkerSupabase(id: string, data: {
   baseSalary: number;
   contractStatus: 'Ativo' | 'Suspenso' | 'Concluído';
   type: 'Fixo' | 'Eventual';
+  photoUrl?: string;
 }) {
   const supabase = getSupabaseClient();
+  const payload: any = {
+    name: data.name,
+    role: data.role,
+    department: data.department,
+    category: data.category || null,
+    base_salary: data.baseSalary,
+    contract_status: data.contractStatus,
+    type: data.type,
+    updated_at: new Date().toISOString(),
+  };
+  
+  if (data.photoUrl) {
+    payload.photo_url = data.photoUrl;
+  }
+  
   const { error } = await supabase
     .from('workers')
-    .update({
-      name: data.name,
-      role: data.role,
-      department: data.department,
-      category: data.category || null,
-      base_salary: data.baseSalary,
-      contract_status: data.contractStatus,
-      type: data.type,
-      updated_at: new Date().toISOString(),
-    })
+    .update(payload)
     .eq('id', id);
   if (error) throw error;
 }

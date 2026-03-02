@@ -53,6 +53,18 @@ const numberFormat = (value: number) => {
     }).format(value);
 };
 
+interface JournalEntryFormValues {
+    date: Date;
+    description: string;
+    documentRef?: string;
+    lines: {
+        accountId: string;
+        accountName?: string;
+        debit: number;
+        credit: number;
+    }[];
+}
+
 export default function JournalPage() {
     const [entries, setEntries] = useState<JournalEntry[]>([]);
     const [loading, setLoading] = useState(true);
@@ -71,8 +83,25 @@ export default function JournalPage() {
         }
     };
 
-    const addEntry = (entry: Omit<JournalEntry, 'id'>) => {
-        setEntries(prev => [{ id: `entry-${Date.now()}`, ...entry }, ...prev]);
+    const addEntry = (entry: JournalEntryFormValues) => {
+        const lines: JournalEntryLine[] = entry.lines.map(l => ({
+            accountId: l.accountId,
+            accountName: l.accountName || '',
+            debit: l.debit,
+            credit: l.credit
+        }));
+        const totalDebit = lines.reduce((sum, line) => sum + line.debit, 0);
+        const totalCredit = lines.reduce((sum, line) => sum + line.credit, 0);
+        const transactionType = identifyTransactionType(lines);
+
+        setEntries(prev => [{ 
+            id: `entry-${Date.now()}`, 
+            ...entry,
+            lines,
+            totalDebit,
+            totalCredit,
+            transactionType
+        }, ...prev]);
     }
 
     useEffect(() => {
@@ -92,19 +121,25 @@ export default function JournalPage() {
                     normalized = entriesData.map((e: any) => {
                         const dateStr = e.entry_date ?? e.date ?? e.created_at;
                         const linesSrc: any[] = Array.isArray(e.journal_entry_lines) ? e.journal_entry_lines : [];
-                    const lines: JournalEntryLine[] = linesSrc.map((l: any) => ({
-                        accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
-                        accountName: String(l.account_name ?? l.accoun_name ?? ''),
-                        debit: Number(l.debit ?? 0),
-                        credit: Number(l.credit ?? 0),
-                    }));
+                        const lines: JournalEntryLine[] = linesSrc.map((l: any) => ({
+                            accountId: String(l.account_id ?? l.account_code ?? l.account ?? ''),
+                            accountName: String(l.account_name ?? l.accoun_name ?? ''),
+                            debit: Number(l.debit ?? 0),
+                            credit: Number(l.credit ?? 0),
+                        }));
+                        const totalDebit = lines.reduce((sum, line) => sum + line.debit, 0);
+                        const totalCredit = lines.reduce((sum, line) => sum + line.credit, 0);
+                        const transactionType = identifyTransactionType(lines);
                         return {
                             id: String(e.id),
                             date: dateStr ? new Date(dateStr) : new Date(),
                             description: e.description ?? '',
                             documentRef: e.document_ref ?? '',
                             lines,
-                        } as JournalEntry;
+                            totalDebit,
+                            totalCredit,
+                            transactionType
+                        };
                     });
                 } else {
                     // Fallback robusto: duas consultas separadas e associação manual
@@ -125,8 +160,7 @@ export default function JournalPage() {
                             date: dateStr ? new Date(dateStr) : new Date(),
                             description: e.description ?? '',
                             documentRef: e.document_ref ?? '',
-                            lines: [],
-                        } as JournalEntry;
+                        };
                     });
 
                     const { data: linesData, error: linesError } = await supabase
@@ -136,7 +170,7 @@ export default function JournalPage() {
                         const message = formatSupabaseError(linesError);
                         console.error('Erro ao consultar journal_entry_lines:', linesError);
                         toast({ title: 'Erro ao carregar linhas', description: message, variant: 'destructive' });
-                        normalized = base; // continua sem linhas
+                        normalized = base.map(b => ({ ...b, lines: [], totalDebit: 0, totalCredit: 0 }));
                     } else {
                         const byEntry: Record<string, JournalEntryLine[]> = {};
                         for (const l of Array.isArray(linesData) ? linesData : []) {
@@ -151,34 +185,25 @@ export default function JournalPage() {
                             byEntry[parentId] = byEntry[parentId] || [];
                             byEntry[parentId].push(line);
                         }
-                        normalized = base.map(n => ({
-                            ...n,
-                            lines: byEntry[String(n.id)] || [],
-                        }));
+                        normalized = base.map(n => {
+                            const lines = byEntry[String(n.id)] || [];
+                            const totalDebit = lines.reduce((sum, line) => sum + line.debit, 0);
+                            const totalCredit = lines.reduce((sum, line) => sum + line.credit, 0);
+                            const transactionType = identifyTransactionType(lines);
+                            return {
+                                ...n,
+                                lines,
+                                totalDebit,
+                                totalCredit,
+                                transactionType
+                            };
+                        });
                     }
                 }
 
-                // Calculate totals and identify transaction types for each entry
-                const enhancedEntries = normalized.map(entry => {
-                    const totalDebit = entry.lines.reduce((sum, line) => sum + line.debit, 0);
-                    const totalCredit = entry.lines.reduce((sum, line) => sum + line.credit, 0);
-                    
-                    // Identify transaction type based on account codes and patterns
-                    const transactionType = entry.lines.length > 0 
-                        ? identifyTransactionType(entry.lines)
-                        : undefined;
-                    
-                    return {
-                        ...entry,
-                        totalDebit,
-                        totalCredit,
-                        transactionType
-                    };
-                });
+                normalized.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-                enhancedEntries.sort((a, b) => b.date.getTime() - a.date.getTime());
-
-                if (isMounted) setEntries(enhancedEntries);
+                if (isMounted) setEntries(normalized);
                 if (normalized.length === 0) {
                     toast({ title: 'Sem lançamentos', description: 'Nenhum lançamento encontrado em journal_entries.' });
                 }

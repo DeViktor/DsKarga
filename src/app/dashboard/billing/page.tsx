@@ -198,9 +198,9 @@ export default function BillingPage() {
           hint: err?.hint || 'No hint',
           stack: err?.stack || 'No stack',
           // Try to capture all enumerable properties
-          enumerableProps: {},
+          enumerableProps: {} as Record<string, any>,
           // Try to capture all own properties
-          ownProps: {}
+          ownProps: {} as Record<string, any>
         };
         
         // Capture enumerable properties

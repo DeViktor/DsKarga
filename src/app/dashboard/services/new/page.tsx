@@ -179,7 +179,7 @@ export default function NewServicePage() {
   if (isPrinting) {
      return (
         <ServiceRequisitionPrintLayout 
-            service={{...formValues, id: 'temp', guideNumber: 'GUIA-A-GERAR', status: 'Pendente', createdAt: {seconds: 0, nanoseconds: 0}}}
+            service={{...formValues, id: 'temp', guideNumber: 'GUIA-A-GERAR', status: 'Pendente', createdAt: new Date()}}
         />
     );
   }

@@ -141,7 +141,14 @@ export default function EpiInventoryPage() {
         open={itemDialogOpen}
         onOpenChange={setItemDialogOpen}
         item={selectedItem}
-        onSave={selectedItem ? updateEpi : addEpi}
+        onSave={(id, data) => {
+          if (id) {
+            return updateEpi(id, data);
+          } else {
+            // Ensure data conforms to EpiItem (minus id)
+            return addEpi(null, data as any);
+          }
+        }}
       />
       <EpiStockEntryDialog
         open={stockDialogOpen}

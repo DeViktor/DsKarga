@@ -251,6 +251,12 @@ export default function WorkerDetailPage() {
     }
   };
 
+  useEffect(() => {
+    if (worker) {
+      setProfilePic(worker.photoUrl || `https://picsum.photos/seed/${worker.id}/200/200`);
+    }
+  }, [worker]);
+
   if (loading || worker === undefined) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -270,12 +276,6 @@ export default function WorkerDetailPage() {
     );
   }
 
-  useEffect(() => {
-    if (worker) {
-      setProfilePic(worker.photoUrl || `https://picsum.photos/seed/${worker.id}/200/200`);
-    }
-  }, [worker]);
-
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !worker) return;
@@ -289,49 +289,45 @@ export default function WorkerDetailPage() {
     }
 
     try {
-      const supabase = getSupabaseClient();
-      const bucket = process.env.NEXT_PUBLIC_SUPABASE_WORKER_PHOTOS_BUCKET || 'worker-photos';
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const workerId = String(worker.id);
-      const path = `${workerId}/${Date.now()}.${ext}`;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('workerId', worker.id);
 
-      const { error: uploadError } = await supabase
-        .storage
-        .from(bucket)
-        .upload(path, file, { cacheControl: '3600', upsert: true });
+      const response = await fetch('/api/upload/worker-photo', {
+        method: 'POST',
+        body: formData,
+      });
 
-      if (uploadError) {
-        throw uploadError;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
       }
 
-      const { data: publicData } = supabase
-        .storage
-        .from(bucket)
-        .getPublicUrl(path);
+      const { url } = await response.json();
 
-      const publicUrl = publicData.publicUrl;
-
+      const supabase = getSupabaseClient();
       const { error: dbError } = await supabase
         .from('workers')
-        .update({ photo_url: publicUrl, updated_at: new Date().toISOString() })
-        .eq('id', workerId);
+        .update({ photo_url: url, updated_at: new Date().toISOString() })
+        .eq('id', worker.id);
+
       if (dbError) {
         toast({
           title: "Erro ao salvar no banco",
-          description: dbError.message.includes("column") ? "Coluna photo_url pode não existir." : "Verifique as políticas (RLS) e permissões.",
+          description: "Foto enviada, mas erro ao atualizar perfil.",
           variant: "destructive",
         });
         return;
       }
 
-      setProfilePic(publicUrl);
-      setWorker(prev => prev ? { ...prev, photoUrl: publicUrl } as Worker : prev);
-      toast({ title: "Foto atualizada", description: "A foto foi enviada para o Supabase." });
-    } catch (err) {
+      setProfilePic(url);
+      setWorker(prev => prev ? { ...prev, photoUrl: url } as Worker : prev);
+      toast({ title: "Foto atualizada", description: "A foto foi enviada com sucesso." });
+    } catch (err: any) {
       console.error('Erro no upload da foto', err);
       toast({
         title: "Erro ao enviar foto",
-        description: "Verifique permissões do bucket e tente novamente.",
+        description: err.message || "Erro desconhecido ao enviar foto.",
         variant: "destructive",
       });
     }
@@ -837,7 +833,8 @@ export default function WorkerDetailPage() {
                             notes: formData.get('notes') as string,
                           };
                           handleAddEvaluation(evaluationData);
-                          (e.currentTarget.closest('[role="dialog"]') as HTMLElement)?.querySelector('[aria-label="Close"]')?.click();
+                          const closeBtn = (e.currentTarget.closest('[role="dialog"]') as HTMLElement)?.querySelector('[type="button"]');
+                          if (closeBtn instanceof HTMLElement) closeBtn.click();
                         }}>
                           <div className="grid gap-4 py-4">
                             <div className="space-y-2">

@@ -40,7 +40,7 @@ export function ServiceRequisitionPrintLayout({ service }: PrintLayoutProps) {
                 <CardContent className="p-4 grid grid-cols-3 gap-4 text-sm">
                     <div><p className="font-bold">Área Solicitante:</p><p>{service.requestingArea}</p></div>
                     <div><p className="font-bold">Responsável:</p><p>{service.responsible}</p></div>
-                    <div><p className="font-bold">Data:</p><p>{format(service.requestDate.toDate(), 'dd/MM/yyyy')}</p></div>
+                    <div><p className="font-bold">Data:</p><p>{format(service.requestDate instanceof Date ? service.requestDate : new Date(service.requestDate), 'dd/MM/yyyy')}</p></div>
                 </CardContent>
             </Card>
             

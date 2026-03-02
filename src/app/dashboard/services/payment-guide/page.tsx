@@ -198,7 +198,8 @@ export default function PaymentGuidePage() {
         role: '',
         contractStatus: 'Ativo',
         baseSalary: 0,
-        category: ''
+        category: '',
+        type: 'Eventual'
     };
     append({
         id: newWorker.id,

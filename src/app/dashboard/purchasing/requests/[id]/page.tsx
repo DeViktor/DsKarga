@@ -118,7 +118,9 @@ export default function PurchaseRequestDetailPage() {
             if (error) throw error;
             toast({ title: "Sucesso", description: `Solicitação marcada como ${status.toLowerCase()}.` });
             setRequest(prev => prev ? { ...prev, status } : prev);
+            router.refresh();
         } catch (error) {
+            console.error('Erro ao atualizar status:', error);
             toast({ title: "Erro", description: "Não foi possível atualizar o estado.", variant: "destructive"});
         }
     }

@@ -139,7 +139,7 @@ export default function NewSupervisionReportPage() {
     };
 
     if (isPrinting && lastReport) {
-        return <SupervisionReportPrintLayout report={lastReport} />;
+        return <SupervisionReportPrintLayout report={{...lastReport, id: 'preview'}} />;
     }
 
   return (

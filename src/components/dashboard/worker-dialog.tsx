@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -28,11 +28,13 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { addWorkerSupabase, updateWorkerSupabase } from '@/lib/supabase/actions';
 import { useActivityLogger, ActivityActions, ActivityTargets } from '@/hooks/use-activity-logger';
-import { Loader2, Search, PlusCircle } from 'lucide-react';
+import { Loader2, Search, PlusCircle, Upload, X } from 'lucide-react';
 import type { Worker } from '@/types/worker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Separator } from '../ui/separator';
 import { useCandidates, type Candidate } from '@/hooks/use-candidates';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 const workerSchema = z.object({
     name: z.string().min(1, 'O nome é obrigatório.'),
@@ -46,6 +48,7 @@ const workerSchema = z.object({
     type: z.enum(['Fixo', 'Eventual'], {
         required_error: "O tipo de trabalhador é obrigatório."
     }),
+    photoUrl: z.string().optional(),
 });
 
 export type WorkerFormValues = z.infer<typeof workerSchema>;
@@ -62,6 +65,11 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
     const { candidates } = useCandidates();
     const [candidateSearchTerm, setCandidateSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    
+    // Photo upload states
+    const [photoFile, setPhotoFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const form = useForm<WorkerFormValues>({
         resolver: zodResolver(workerSchema),
@@ -69,8 +77,10 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
 
     useEffect(() => {
         if (open) {
+            setPhotoFile(null);
             if (worker) {
                 form.reset(worker);
+                setPreviewUrl(worker.photoUrl || null);
             } else {
                 form.reset({
                     name: '',
@@ -79,17 +89,77 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                     category: '',
                     baseSalary: 0,
                     contractStatus: 'Ativo',
-                    type: 'Eventual'
+                    type: 'Eventual',
+                    photoUrl: '',
                 });
+                setPreviewUrl(null);
             }
         }
     }, [worker, open, form]);
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setPhotoFile(file);
+            const url = URL.createObjectURL(file);
+            setPreviewUrl(url);
+        }
+    };
+
+    const handleRemovePhoto = () => {
+        setPhotoFile(null);
+        setPreviewUrl(null);
+        form.setValue('photoUrl', '');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const uploadPhoto = async (file: File): Promise<string | null> => {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('workerId', 'temp'); // For new workers, we use a temp ID or just the filename strategy
+
+            const response = await fetch('/api/upload/worker-photo', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Upload failed');
+            }
+
+            const { url } = await response.json();
+            return url;
+        } catch (error) {
+            console.error('Error uploading photo:', error);
+            toast({
+                title: 'Erro no Upload',
+                description: 'Não foi possível carregar a foto.',
+                variant: 'destructive',
+            });
+            return null;
+        }
+    };
+
     const onSubmit = async (data: WorkerFormValues) => {
         setIsLoading(true);
         try {
+            let finalPhotoUrl = data.photoUrl;
+
+            if (photoFile) {
+                const uploadedUrl = await uploadPhoto(photoFile);
+                if (uploadedUrl) {
+                    finalPhotoUrl = uploadedUrl;
+                }
+            }
+
+            const dataWithPhoto = { ...data, photoUrl: finalPhotoUrl };
+
             if (worker) {
-                await updateWorkerSupabase(worker.id, data);
+                await updateWorkerSupabase(worker.id, dataWithPhoto);
                 await logActivity(
                     ActivityActions.UPDATE,
                     data.name,
@@ -103,7 +173,7 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                 );
                 toast({ title: 'Sucesso!', description: 'Os dados do trabalhador foram atualizados.' });
             } else {
-                await addWorkerSupabase(data);
+                await addWorkerSupabase(dataWithPhoto);
                 await logActivity(
                     ActivityActions.CREATE,
                     data.name,
@@ -162,6 +232,41 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                         <h3 className='font-semibold mb-2'>Preenchimento Manual</h3>
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                                <div className="flex flex-col items-center gap-4 mb-4">
+                                    <Avatar className="h-24 w-24">
+                                        <AvatarImage src={previewUrl || ''} />
+                                        <AvatarFallback>{form.getValues('name')?.charAt(0) || '?'}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="relative"
+                                            onClick={() => fileInputRef.current?.click()}
+                                        >
+                                            <Upload className="h-4 w-4 mr-2" />
+                                            Carregar Foto
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={handleFileChange}
+                                            />
+                                        </Button>
+                                        {previewUrl && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={handleRemovePhoto}
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
                                 <FormField name="name" control={form.control} render={({ field }) => ( <FormItem> <FormLabel>Nome Completo</FormLabel> <FormControl><Input placeholder="Nome do trabalhador" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
                                 <FormField name="role" control={form.control} render={({ field }) => ( <FormItem> <FormLabel>Função</FormLabel> <FormControl><Input placeholder="Ex: Estivador" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
                                 <FormField name="department" control={form.control} render={({ field }) => ( <FormItem> <FormLabel>Departamento</FormLabel> <FormControl><Input placeholder="Ex: Logística" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>

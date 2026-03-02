@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { User, Bell, Settings } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { ModeToggle } from "@/components/mode-toggle";
 
 interface DashboardHeaderProps {
   title: string;
@@ -18,6 +19,7 @@ export function DashboardHeader({ title, children }: DashboardHeaderProps) {
       </div>
       <div className="flex items-center gap-4">
         {children}
+        <ModeToggle />
         <Button variant="ghost" size="icon">
           <Bell className="h-5 w-5" />
           <span className="sr-only">Notificações</span>

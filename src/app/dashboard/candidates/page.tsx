@@ -42,7 +42,6 @@ export default function CandidatesPage() {
         email: candidate.email,
         phone_number: candidate.phoneNumber,
         seniority: candidate.seniority,
-        gender: candidate.gender,
         age: candidate.age,
         area_of_specialization: candidate.areaOfSpecialization,
         years_of_experience: candidate.yearsOfExperience,

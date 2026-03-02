@@ -113,10 +113,10 @@ const numberFormat = (value: number) => {
         if (!selectedAccountId) return [];
         let balance = 0;
         return journalEntries
-            .flatMap(entry => 
-                entry.lines
-                    .filter(line => line.accountId === selectedAccountId)
-                    .map(line => ({
+            .flatMap((entry: any) => 
+                (entry.lines as any[])
+                    .filter((line: any) => line.accountId === selectedAccountId)
+                    .map((line: any) => ({
                         date: entry.date,
                         description: entry.description,
                         debit: line.debit,
@@ -124,7 +124,7 @@ const numberFormat = (value: number) => {
                         balance: balance += line.debit - line.credit
                     }))
             );
-    }, [selectedAccountId]);
+    }, [selectedAccountId, journalEntries]);
     
     const selectedAccount = pgcAccounts.find(a => a.code === selectedAccountId);
 

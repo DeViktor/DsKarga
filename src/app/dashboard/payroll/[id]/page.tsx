@@ -38,7 +38,7 @@ export default function PayrollDetailPage() {
 
   // In a real app, you'd fetch the specific payroll run data using the id
   const payrollId = params.id;
-  const period = payrollId.toString().replace('pay-', '').replace('-', '/'); // e.g., "2024/07"
+  const period = payrollId ? payrollId.toString().replace('pay-', '').replace('-', '/') : ''; // e.g., "2024/07"
 
   const payrollData = workers.map(worker => {
     const baseSalary = worker.baseSalary || 0;

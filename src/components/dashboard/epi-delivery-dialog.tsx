@@ -59,7 +59,7 @@ type DeliveryFormValues = z.infer<typeof deliverySchema>;
 export function EpiDeliveryDialog({ open, onOpenChange, workers, epis, onDeliverySuccess }: EpiDeliveryDialogProps) {
   const { toast } = useToast();
   const { updateEpi } = useEpiItems();
-  const [deliveryDetails, setDeliveryDetails] = useState<DeliveryFormValues & { workerName: string, epiName: string } | null>(null);
+  const [deliveryDetails, setDeliveryDetails] = useState<(DeliveryFormValues & { workerName: string, epiName: string, date: Date }) | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
 
   const form = useForm<DeliveryFormValues>({
@@ -179,7 +179,7 @@ export function EpiDeliveryDialog({ open, onOpenChange, workers, epis, onDeliver
                 </div>
                  <div className="flex justify-between font-medium">
                     <span>Data</span>
-                    <span>{format(deliveryDetails.date, 'dd/MM/yyyy')}</span>
+                    <span>{format(new Date(deliveryDetails.date), 'dd/MM/yyyy')}</span>
                 </div>
             </div>
             <p>Comprometo-me a utilizá-lo(s) corretamente durante o exercício das minhas funções, a zelar pela sua conservação e a devolvê-lo(s) quando solicitado.</p>

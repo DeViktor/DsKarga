@@ -12,7 +12,7 @@ function getSupabaseServerClient() {
 }
 
 export async function GET() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const token = cookieStore.get('sb-auth-token');
   const userId = cookieStore.get('sb-auth-user');
   const iat = cookieStore.get('sb-auth-iat');

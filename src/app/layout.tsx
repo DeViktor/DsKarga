@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { UserProvider } from '@/contexts/user-context';
+import { ThemeProvider } from '@/contexts/theme-context';
 
 export const metadata: Metadata = {
   title: 'DS KARGA SISTEM',
@@ -22,9 +23,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        <UserProvider>
-          {children}
-        </UserProvider>
+        <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
+          <UserProvider>
+            {children}
+          </UserProvider>
+        </ThemeProvider>
         <Toaster />
       </body>
     </html>

@@ -115,7 +115,7 @@ export default function CashFlowPage() {
                 // 1. Buscar transações da tabela cash_flow_transactions
                 console.log('📊 Buscando transações...');
                 let transactionsData = null;
-                let transactionsError = null;
+                let transactionsError: any = null;
                 
                 try {
                     const result = await supabase
@@ -167,7 +167,7 @@ export default function CashFlowPage() {
                         id: `trans-${t.id}`,
                         description: t.description || 'Transação',
                         amount: Number(t.amount) || 0,
-                        type: t.type || (Number(t.amount) >= 0 ? 'receita' : 'despesa'),
+                        type: (t.type || (Number(t.amount) >= 0 ? 'receita' : 'despesa')) as 'receita' | 'despesa',
                         category: t.category || 'Geral',
                         date: t.transaction_date ? new Date(t.transaction_date) : new Date(),
                         source: 'transactions' as const
@@ -244,7 +244,7 @@ export default function CashFlowPage() {
                         id: `journal-${j.id}`,
                         description: j.description || 'Lançamento Contábil',
                         amount: Number(j.amount) || 0,
-                        type: Number(j.amount) >= 0 ? 'receita' : 'despesa',
+                        type: (Number(j.amount) >= 0 ? 'receita' : 'despesa') as 'receita' | 'despesa',
                         category: 'Contabilidade',
                         date: j.entry_date ? new Date(j.entry_date) : new Date(),
                         source: 'journal_entries' as const

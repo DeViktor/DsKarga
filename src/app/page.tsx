@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 
-export default function Home() {
-  const c = cookies()
+export default async function Home() {
+  const c = await cookies()
   const token = c.get('sb-auth-token')?.value
   const user = c.get('sb-auth-user')?.value
   const iatStr = c.get('sb-auth-iat')?.value
