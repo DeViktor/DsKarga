@@ -315,6 +315,9 @@ export async function addWorkerSupabase(data: {
   contractStatus: 'Ativo' | 'Suspenso' | 'Concluído';
   type: 'Fixo' | 'Eventual';
   photoUrl?: string;
+  admissionDate?: string;
+  contractType?: string;
+  admissionNotes?: string;
 }) {
   const supabase = getSupabaseClient();
   const payload = {
@@ -326,6 +329,9 @@ export async function addWorkerSupabase(data: {
     contract_status: data.contractStatus,
     type: data.type,
     photo_url: data.photoUrl || null,
+    admission_date: data.admissionDate || null,
+    contract_type: data.contractType || null,
+    admission_notes: data.admissionNotes || null,
     created_at: new Date().toISOString(),
   };
   const { data: inserted, error } = await supabase
@@ -348,6 +354,9 @@ export async function updateWorkerSupabase(id: string, data: {
   contractStatus: 'Ativo' | 'Suspenso' | 'Concluído';
   type: 'Fixo' | 'Eventual';
   photoUrl?: string;
+  admissionDate?: string;
+  contractType?: string;
+  admissionNotes?: string;
 }) {
   const supabase = getSupabaseClient();
   const payload: any = {
@@ -363,6 +372,15 @@ export async function updateWorkerSupabase(id: string, data: {
   
   if (data.photoUrl) {
     payload.photo_url = data.photoUrl;
+  }
+  if (data.admissionDate !== undefined) {
+    payload.admission_date = data.admissionDate || null;
+  }
+  if (data.contractType !== undefined) {
+    payload.contract_type = data.contractType || null;
+  }
+  if (data.admissionNotes !== undefined) {
+    payload.admission_notes = data.admissionNotes || null;
   }
   
   const { error } = await supabase
