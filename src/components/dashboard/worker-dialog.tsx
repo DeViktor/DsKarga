@@ -49,7 +49,6 @@ const workerSchema = z.object({
     photoUrl: z.string().optional(),
     admissionDate: z.string().optional(),
     contractType: z.string().optional(),
-    admissionNotes: z.string().optional(),
     nationality: z.string().optional(),
     address: z.string().optional(),
     maritalStatus: z.string().optional(),
@@ -95,37 +94,23 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
         if (open) {
             setPhotoFile(null);
             if (worker) {
-                form.reset(worker);
+                // Merge worker data with default values to ensure no undefined fields
+                const defaultValues = getDefaultFormValues();
+                const workerData = {
+                    ...defaultValues,
+                    ...worker,
+                    // Ensure numeric fields have proper values
+                    baseSalary: worker.baseSalary ?? defaultValues.baseSalary,
+                    foodAllowance: worker.foodAllowance ?? defaultValues.foodAllowance,
+                    transportAllowance: worker.transportAllowance ?? defaultValues.transportAllowance,
+                    shiftAllowance: worker.shiftAllowance ?? defaultValues.shiftAllowance,
+                    bonus: worker.bonus ?? defaultValues.bonus,
+                    commission: worker.commission ?? defaultValues.commission,
+                };
+                form.reset(workerData);
                 setPreviewUrl(worker.photoUrl || null);
             } else {
-                form.reset({
-                    name: '',
-                    role: '',
-                    department: 'Logística',
-                    category: '',
-                    baseSalary: 0,
-                    contractStatus: 'Ativo',
-                    type: 'Eventual',
-                    photoUrl: '',
-                    admissionDate: '',
-                    contractType: '',
-                    admissionNotes: '',
-                    nationality: 'Angolana',
-                    address: '',
-                    maritalStatus: '',
-                    birthDate: '',
-                    email: '',
-                    foodAllowance: 0,
-                    transportAllowance: 0,
-                    shiftAllowance: 0,
-                    bonus: 0,
-                    commission: 0,
-                    gender: '',
-                    nif: '',
-                    bi: '',
-                    socialSecurityNumber: '',
-                    phone: '',
-                });
+                form.reset(getDefaultFormValues());
                 setPreviewUrl(null);
             }
         }
@@ -178,6 +163,35 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
         }
     };
 
+    // Helper function to ensure all fields have proper default values
+    const getDefaultFormValues = (): WorkerFormValues => ({
+        name: '',
+        role: '',
+        department: 'Logística',
+        category: '',
+        baseSalary: 0,
+        contractStatus: 'Ativo',
+        type: 'Eventual',
+        photoUrl: '',
+        admissionDate: '',
+        contractType: '',
+        nationality: 'Angolana',
+        address: '',
+        maritalStatus: '',
+        birthDate: '',
+        email: '',
+        foodAllowance: 0,
+        transportAllowance: 0,
+        shiftAllowance: 0,
+        bonus: 0,
+        commission: 0,
+        gender: '',
+        nif: '',
+        bi: '',
+        socialSecurityNumber: '',
+        phone: '',
+    });
+
     const onSubmit = async (data: WorkerFormValues) => {
         setIsLoading(true);
         try {
@@ -193,32 +207,27 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
             const dataWithPhoto = {
                 ...data,
                 photoUrl: finalPhotoUrl,
-                admissionDate: data.admissionDate || undefined,
-                contractType: data.contractType || undefined,
-                admissionNotes: data.admissionNotes || undefined,
-                nationality: data.nationality || undefined,
-                address: data.address || undefined,
-                maritalStatus: data.maritalStatus || undefined,
-                birthDate: data.birthDate || undefined,
-                email: data.email || undefined,
-                foodAllowance: data.foodAllowance || 0,
-                transportAllowance: data.transportAllowance || 0,
-                shiftAllowance: data.shiftAllowance || 0,
-                bonus: data.bonus || 0,
-                commission: data.commission || 0,
                 // Map camelCase to snake_case for Supabase
                 base_salary: data.baseSalary,
                 contract_status: data.contractStatus,
                 photo_url: finalPhotoUrl,
                 admission_date: data.admissionDate || undefined,
                 contract_type: data.contractType || undefined,
-                admission_notes: data.admissionNotes || undefined,
+                nationality: data.nationality || undefined,
+                address: data.address || undefined,
                 marital_status: data.maritalStatus || undefined,
                 birth_date: data.birthDate || undefined,
+                email: data.email || undefined,
                 food_allowance: data.foodAllowance || 0,
                 transport_allowance: data.transportAllowance || 0,
                 shift_allowance: data.shiftAllowance || 0,
+                bonus: data.bonus || 0,
+                commission: data.commission || 0,
                 social_security_number: data.socialSecurityNumber || undefined,
+                bi: data.bi || undefined,
+                nif: data.nif || undefined,
+                phone: data.phone || undefined,
+                gender: data.gender || undefined,
             };
 
             if (worker) {
@@ -284,8 +293,9 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
             {/*
               max-w-4xl para dar mais largura ao dialog e acomodar o layout de duas colunas.
               overflow-hidden para conter o scroll interno corretamente.
+              max-h-[90vh] para limitar a altura máxima do modal.
             */}
-            <DialogContent className="sm:max-w-4xl overflow-hidden p-0">
+            <DialogContent className="sm:max-w-4xl overflow-hidden p-0 max-h-[90vh]">
                 <DialogHeader className="px-6 pt-6 pb-4 border-b">
                     <DialogTitle className="font-headline">
                         {worker ? 'Editar Trabalhador' : 'Adicionar Novo Trabalhador'}
@@ -299,17 +309,18 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                   Layout principal: flex row.
                   - Coluna esquerda (formulário): flex-1, cresce e ocupa todo espaço livre.
                   - Coluna direita (candidatos): largura fixa w-72, não encolhe (flex-shrink-0).
+                  - max-h-[calc(90vh-120px)] para limitar altura do conteúdo considerando header.
                 */}
-                <div className="flex min-h-0">
+                <div className="flex min-h-0 max-h-[calc(90vh-120px)]">
 
                     {/* ── Coluna esquerda: Formulário ── */}
-                    <div className="flex-1 overflow-y-auto px-6 py-5 border-r">
+                    <div className="flex-1 overflow-y-auto px-6 py-5 border-r max-h-[calc(90vh-120px)]">
                         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
                             Preenchimento Manual
                         </h3>
 
                         <Form {...form}>
-                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 pb-6">
 
                                 {/* Avatar + botão de foto */}
                                 <div className="flex flex-col items-center gap-3">
@@ -497,15 +508,6 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                                         </FormItem>
                                     )} />
 
-                                    {/* Notas — linha inteira (w-full) */}
-                                    <FormField name="admissionNotes" control={form.control} render={({ field }) => (
-                                        <FormItem className="w-full">
-                                            <FormLabel>Notas de Admissão (opcional)</FormLabel>
-                                            <FormControl><Input placeholder="Observações" {...field} /></FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )} />
-
                                     {/* Subsídios e bónus — meia largura cada */}
                                     <FormField name="foodAllowance" control={form.control} render={({ field }) => (
                                         <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
@@ -587,7 +589,7 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
 
                                 </div>
 
-                                <DialogFooter className="pt-4 border-t">
+                                <DialogFooter className="pt-4 border-t sticky bottom-0 bg-background">
                                     <DialogClose asChild>
                                         <Button type="button" variant="outline">Cancelar</Button>
                                     </DialogClose>
@@ -601,7 +603,7 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                     </div>
 
                     {/* ── Coluna direita: Banco de Candidatos (largura fixa, não encolhe) ── */}
-                    <div className="w-72 flex-shrink-0 flex flex-col gap-4 px-5 py-5 bg-muted/40">
+                    <div className="w-72 flex-shrink-0 flex flex-col gap-4 px-5 py-5 bg-muted/40 max-h-[calc(90vh-120px)] overflow-y-auto">
                         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Banco de Candidatos
                         </h3>

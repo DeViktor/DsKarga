@@ -50,7 +50,7 @@ export async function admitWorkerSupabase(id: string, admissionData: {
       updated_at: new Date().toISOString(),
     })
     .eq('id', id);
-  
+
   if (error) throw error;
 }
 
@@ -61,7 +61,7 @@ export async function terminateWorkerSupabase(workerId: string, terminationData:
   finalFeedback?: string;
 }) {
   const supabase = getSupabaseClient();
-  
+
   // Atualizar status do trabalhador
   const { error: workerError } = await supabase
     .from('workers')
@@ -70,9 +70,9 @@ export async function terminateWorkerSupabase(workerId: string, terminationData:
       updated_at: new Date().toISOString(),
     })
     .eq('id', workerId);
-  
+
   if (workerError) throw workerError;
-  
+
   // Tentar criar registro de desligamento (opcional por enquanto)
   try {
     const { error: terminationError } = await supabase
@@ -85,7 +85,7 @@ export async function terminateWorkerSupabase(workerId: string, terminationData:
         final_feedback: terminationData.finalFeedback || null,
         created_at: new Date().toISOString(),
       });
-    
+
     if (terminationError) {
       console.warn('Não foi possível criar registro de desligamento (tabela pode não existir):', terminationError);
     }
@@ -101,7 +101,7 @@ export async function createTerminationRequest(workerId: string, workerName: str
   finalFeedback?: string;
 }) {
   const supabase = getSupabaseClient();
-  
+
   const { data, error } = await supabase
     .from('termination_requests')
     .insert({
@@ -118,37 +118,37 @@ export async function createTerminationRequest(workerId: string, workerName: str
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
 
 export async function getPendingTerminationRequests() {
   const supabase = getSupabaseClient();
-  
+
   const { data, error } = await supabase
     .from('termination_requests')
     .select('*')
     .eq('status', 'Pendente')
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
   return data;
 }
 
 export async function approveTerminationRequest(requestId: string, approvedBy: string) {
   const supabase = getSupabaseClient();
-  
+
   // Primeiro, obter os dados da solicitação
   const { data: request, error: requestError } = await supabase
     .from('termination_requests')
     .select('*')
     .eq('id', requestId)
     .single();
-  
+
   if (requestError) throw requestError;
   if (!request) throw new Error('Solicitação não encontrada');
-  
+
   // Atualizar a solicitação para aprovada
   const { error: updateError } = await supabase
     .from('termination_requests')
@@ -158,9 +158,9 @@ export async function approveTerminationRequest(requestId: string, approvedBy: s
       updated_at: new Date().toISOString(),
     })
     .eq('id', requestId);
-  
+
   if (updateError) throw updateError;
-  
+
   // Executar o desligamento efetivo
   await terminateWorkerSupabase(request.worker_id, {
     terminationDate: request.termination_date,
@@ -168,13 +168,13 @@ export async function approveTerminationRequest(requestId: string, approvedBy: s
     terminationNotes: request.notes,
     finalFeedback: request.final_feedback,
   });
-  
+
   return request;
 }
 
 export async function rejectTerminationRequest(requestId: string, rejectionReason: string, rejectedBy: string) {
   const supabase = getSupabaseClient();
-  
+
   const { error } = await supabase
     .from('termination_requests')
     .update({
@@ -182,7 +182,7 @@ export async function rejectTerminationRequest(requestId: string, rejectionReaso
       updated_at: new Date().toISOString(),
     })
     .eq('id', requestId);
-  
+
   if (error) throw error;
 }
 
@@ -317,7 +317,21 @@ export async function addWorkerSupabase(data: {
   photoUrl?: string;
   admissionDate?: string;
   contractType?: string;
-  admissionNotes?: string;
+  nationality: string;
+  address: string;
+  maritalStatus: string;
+  birthDate: string;
+  email: string;
+  foodAllowance: number;
+  transportAllowance: number;
+  shiftAllowance: number;
+  bonus: number;
+  commission: number;
+  gender: string;
+  nif: string;
+  bi: string;
+  socialSecurityNumber: string;
+  phone: string;
 }) {
   const supabase = getSupabaseClient();
   const payload = {
@@ -331,7 +345,6 @@ export async function addWorkerSupabase(data: {
     photo_url: data.photoUrl || null,
     admission_date: data.admissionDate || null,
     contract_type: data.contractType || null,
-    admission_notes: data.admissionNotes || null,
     created_at: new Date().toISOString(),
   };
   const { data: inserted, error } = await supabase
@@ -369,7 +382,7 @@ export async function updateWorkerSupabase(id: string, data: {
     type: data.type,
     updated_at: new Date().toISOString(),
   };
-  
+
   if (data.photoUrl) {
     payload.photo_url = data.photoUrl;
   }
@@ -382,7 +395,7 @@ export async function updateWorkerSupabase(id: string, data: {
   if (data.admissionNotes !== undefined) {
     payload.admission_notes = data.admissionNotes || null;
   }
-  
+
   const { error } = await supabase
     .from('workers')
     .update(payload)

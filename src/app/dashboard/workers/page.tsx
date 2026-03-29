@@ -42,11 +42,23 @@ export default function WorkersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<WorkerWithService | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const { workers: allWorkers, loading } = useWorkers();
 
-  const fixedWorkers = useMemo(() => allWorkers.filter(w => w.type === 'Fixo'), [allWorkers]);
-  const eventualWorkers = useMemo(() => allWorkers.filter(w => w.type === 'Eventual'), [allWorkers]);
+  const filteredWorkers = useMemo(() => {
+    if (!searchTerm) return allWorkers;
+    const lowerSearch = searchTerm.toLowerCase();
+    return allWorkers.filter(w => 
+      (w.name?.toLowerCase() || '').includes(lowerSearch) ||
+      (w.department?.toLowerCase() || '').includes(lowerSearch) ||
+      (w.role?.toLowerCase() || '').includes(lowerSearch) ||
+      (w.bi?.toLowerCase() || '').includes(lowerSearch)
+    );
+  }, [allWorkers, searchTerm]);
+
+  const fixedWorkers = useMemo(() => filteredWorkers.filter(w => w.type === 'Fixo'), [filteredWorkers]);
+  const eventualWorkers = useMemo(() => filteredWorkers.filter(w => w.type === 'Eventual'), [filteredWorkers]);
 
   const handleEdit = (worker: WorkerWithService) => {
     setSelectedWorker(worker);
@@ -193,7 +205,11 @@ export default function WorkersPage() {
     }
 
     if (!allWorkers || allWorkers.length === 0) {
-        return <div className="text-center text-muted-foreground py-16">Nenhum trabalhador encontrado.</div>
+        return <div className="text-center text-muted-foreground py-16">Nenhum trabalhador encontrado no sistema.</div>
+    }
+
+    if (filteredWorkers.length === 0) {
+        return <div className="text-center text-muted-foreground py-16">Nenhum trabalhador encontrado para "{searchTerm}".</div>
     }
 
     const renderer = view === 'list' ? renderTable : renderGrid;
@@ -217,6 +233,8 @@ export default function WorkersPage() {
             type="search"
             placeholder="Procurar trabalhadores..."
             className="w-full rounded-lg bg-background pl-8 md:w-[200px] lg:w-[320px]"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="flex items-center gap-2">

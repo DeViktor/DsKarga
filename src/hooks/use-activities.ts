@@ -36,28 +36,46 @@ export function useRecentActivities(limitCount: number = 10) {
         if (error) {
            // Check if error is because table doesn't exist
            if (error.code === '42P01') {
-             console.warn('Tabela activities não encontrada. Ignorando erro.');
+             console.warn('Tabela activities não encontrada. Criando tabela...');
+             console.log('Detalhes do erro:', {
+               code: error.code,
+               message: error.message,
+               details: error.details,
+               hint: error.hint,
+             });
              if (isMounted) setActivities([]);
              return;
            }
+           console.error('Erro ao buscar atividades:', {
+             code: error.code,
+             message: error.message,
+             details: error.details,
+             hint: error.hint,
+           });
            throw error;
         } 
         
         if (data && isMounted) {
           setActivities(data.map((item: any) => ({
             id: item.id,
-            user: item.user_name || item.user || 'Sistema',
-            userId: item.user_id || item.userId,
-            userAvatar: item.user_avatar || item.userAvatar,
+            user: item.user_name || 'Sistema',
+            userId: item.user_id,
+            userAvatar: item.user_avatar,
             action: item.action,
             target: item.target,
-            targetType: item.target_type || item.targetType,
-            timestamp: new Date(item.created_at || item.timestamp || new Date()),
+            targetType: item.target_type,
+            timestamp: new Date(item.created_at),
             metadata: item.metadata
           })));
         }
       } catch (err) {
-        console.error('Erro ao carregar atividades:', err);
+        console.error('Erro ao carregar atividades:', {
+          error: err,
+          message: err instanceof Error ? err.message : 'Erro desconhecido',
+          code: (err as any)?.code,
+          details: (err as any)?.details,
+          hint: (err as any)?.hint,
+        });
         if (isMounted) setActivities([]);
       } finally {
         if (isMounted) setLoading(false);
@@ -98,18 +116,22 @@ export async function logActivity(
   const supabase = getSupabaseClient();
   try {
     const { error } = await supabase.from('activities').insert({
-      user: userName,
-      userId,
-      userAvatar,
+      user_name: userName,
+      user_id: userId,
+      user_avatar: userAvatar,
       action,
       target,
-      targetType,
-      timestamp: new Date().toISOString(),
+      target_type: targetType,
       metadata: metadata || {},
     });
     
     if (error) throw error;
   } catch (error) {
-    console.error('Erro ao registrar atividade:', error);
+    console.error('Erro ao registrar atividade:', {
+      error: error,
+      message: error instanceof Error ? error.message : 'Erro desconhecido',
+      code: (error as any)?.code,
+      details: (error as any)?.details,
+    });
   }
 }
