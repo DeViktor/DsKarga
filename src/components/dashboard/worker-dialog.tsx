@@ -50,6 +50,21 @@ const workerSchema = z.object({
     admissionDate: z.string().optional(),
     contractType: z.string().optional(),
     admissionNotes: z.string().optional(),
+    nationality: z.string().optional(),
+    address: z.string().optional(),
+    maritalStatus: z.string().optional(),
+    birthDate: z.string().optional(),
+    email: z.string().email('Email inválido').optional().or(z.literal('')),
+    foodAllowance: z.coerce.number().min(0, 'O subsídio de alimentação deve ser positivo').optional(),
+    transportAllowance: z.coerce.number().min(0, 'O subsídio de transporte deve ser positivo').optional(),
+    shiftAllowance: z.coerce.number().min(0, 'O subsídio de turno deve ser positivo').optional(),
+    bonus: z.coerce.number().min(0, 'O bónus deve ser positivo').optional(),
+    commission: z.coerce.number().min(0, 'A comissão deve ser positiva').optional(),
+    gender: z.string().optional(),
+    nif: z.string().optional(),
+    bi: z.string().optional(),
+    socialSecurityNumber: z.string().optional(),
+    phone: z.string().optional(),
 });
 
 export type WorkerFormValues = z.infer<typeof workerSchema>;
@@ -95,6 +110,21 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                     admissionDate: '',
                     contractType: '',
                     admissionNotes: '',
+                    nationality: 'Angolana',
+                    address: '',
+                    maritalStatus: '',
+                    birthDate: '',
+                    email: '',
+                    foodAllowance: 0,
+                    transportAllowance: 0,
+                    shiftAllowance: 0,
+                    bonus: 0,
+                    commission: 0,
+                    gender: '',
+                    nif: '',
+                    bi: '',
+                    socialSecurityNumber: '',
+                    phone: '',
                 });
                 setPreviewUrl(null);
             }
@@ -166,6 +196,29 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                 admissionDate: data.admissionDate || undefined,
                 contractType: data.contractType || undefined,
                 admissionNotes: data.admissionNotes || undefined,
+                nationality: data.nationality || undefined,
+                address: data.address || undefined,
+                maritalStatus: data.maritalStatus || undefined,
+                birthDate: data.birthDate || undefined,
+                email: data.email || undefined,
+                foodAllowance: data.foodAllowance || 0,
+                transportAllowance: data.transportAllowance || 0,
+                shiftAllowance: data.shiftAllowance || 0,
+                bonus: data.bonus || 0,
+                commission: data.commission || 0,
+                // Map camelCase to snake_case for Supabase
+                base_salary: data.baseSalary,
+                contract_status: data.contractStatus,
+                photo_url: finalPhotoUrl,
+                admission_date: data.admissionDate || undefined,
+                contract_type: data.contractType || undefined,
+                admission_notes: data.admissionNotes || undefined,
+                marital_status: data.maritalStatus || undefined,
+                birth_date: data.birthDate || undefined,
+                food_allowance: data.foodAllowance || 0,
+                transport_allowance: data.transportAllowance || 0,
+                shift_allowance: data.shiftAllowance || 0,
+                social_security_number: data.socialSecurityNumber || undefined,
             };
 
             if (worker) {
@@ -388,7 +441,7 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                                         </FormItem>
                                     )} />
 
-                                    <FormField name="social_security_number" control={form.control} render={({ field }) => (
+                                    <FormField name="socialSecurityNumber" control={form.control} render={({ field }) => (
                                         <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
                                             <FormLabel>Numero do Seguro Social</FormLabel>
                                             <FormControl><Input placeholder="Ex: 123456789" {...field} /></FormControl>
@@ -398,8 +451,48 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
 
                                     <FormField name="phone" control={form.control} render={({ field }) => (
                                         <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
-                                            <FormLabel>Numero do Seguro Social</FormLabel>
-                                            <FormControl><Input placeholder="Ex: 123456789" {...field} /></FormControl>
+                                            <FormLabel>Telefone</FormLabel>
+                                            <FormControl><Input placeholder="Ex: +244 912 345 678" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    <FormField name="email" control={form.control} render={({ field }) => (
+                                        <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
+                                            <FormLabel>Email</FormLabel>
+                                            <FormControl><Input type="email" placeholder="exemplo@email.com" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    <FormField name="birthDate" control={form.control} render={({ field }) => (
+                                        <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
+                                            <FormLabel>Data de Nascimento</FormLabel>
+                                            <FormControl><Input type="date" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    <FormField name="nationality" control={form.control} render={({ field }) => (
+                                        <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
+                                            <FormLabel>Nacionalidade</FormLabel>
+                                            <FormControl><Input placeholder="Ex: Angolana" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    <FormField name="maritalStatus" control={form.control} render={({ field }) => (
+                                        <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
+                                            <FormLabel>Estado Civil</FormLabel>
+                                            <FormControl><Input placeholder="Ex: Solteiro" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    <FormField name="address" control={form.control} render={({ field }) => (
+                                        <FormItem className="w-full">
+                                            <FormLabel>Morada</FormLabel>
+                                            <FormControl><Input placeholder="Ex: Rua 1, Bairro 2, Luanda" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )} />
@@ -409,6 +502,47 @@ export function WorkerDialog({ open, onOpenChange, worker }: WorkerDialogProps) 
                                         <FormItem className="w-full">
                                             <FormLabel>Notas de Admissão (opcional)</FormLabel>
                                             <FormControl><Input placeholder="Observações" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    {/* Subsídios e bónus — meia largura cada */}
+                                    <FormField name="foodAllowance" control={form.control} render={({ field }) => (
+                                        <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
+                                            <FormLabel>Subsídio de Alimentação (AKZ)</FormLabel>
+                                            <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    <FormField name="transportAllowance" control={form.control} render={({ field }) => (
+                                        <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
+                                            <FormLabel>Subsídio de Transporte (AKZ)</FormLabel>
+                                            <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    <FormField name="shiftAllowance" control={form.control} render={({ field }) => (
+                                        <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
+                                            <FormLabel>Subsídio de Turno (AKZ)</FormLabel>
+                                            <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    <FormField name="bonus" control={form.control} render={({ field }) => (
+                                        <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
+                                            <FormLabel>Bónus (AKZ)</FormLabel>
+                                            <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+
+                                    <FormField name="commission" control={form.control} render={({ field }) => (
+                                        <FormItem className="flex-1 basis-[calc(50%-0.375rem)] min-w-[160px]">
+                                            <FormLabel>Comissão (AKZ)</FormLabel>
+                                            <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )} />
