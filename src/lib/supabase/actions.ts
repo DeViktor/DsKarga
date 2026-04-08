@@ -345,6 +345,21 @@ export async function addWorkerSupabase(data: {
     photo_url: data.photoUrl || null,
     admission_date: data.admissionDate || null,
     contract_type: data.contractType || null,
+    nationality: data.nationality || null,
+    address: data.address || null,
+    marital_status: data.maritalStatus || null,
+    birth_date: data.birthDate || null,
+    email: data.email || null,
+    food_allowance: data.foodAllowance || 0,
+    transport_allowance: data.transportAllowance || 0,
+    shift_allowance: data.shiftAllowance || 0,
+    bonus: data.bonus || 0,
+    commission: data.commission || 0,
+    gender: data.gender || null,
+    nif: data.nif || null,
+    bi: data.bi || null,
+    social_security_number: data.socialSecurityNumber || null,
+    phone: data.phone || null,
     created_at: new Date().toISOString(),
   };
   const { data: inserted, error } = await supabase
@@ -370,6 +385,21 @@ export async function updateWorkerSupabase(id: string, data: {
   admissionDate?: string;
   contractType?: string;
   admissionNotes?: string;
+  nationality?: string;
+  address?: string;
+  maritalStatus?: string;
+  birthDate?: string;
+  email?: string;
+  foodAllowance?: number;
+  transportAllowance?: number;
+  shiftAllowance?: number;
+  bonus?: number;
+  commission?: number;
+  gender?: string;
+  nif?: string;
+  bi?: string;
+  socialSecurityNumber?: string;
+  phone?: string;
 }) {
   const supabase = getSupabaseClient();
   const payload: any = {
@@ -394,6 +424,51 @@ export async function updateWorkerSupabase(id: string, data: {
   }
   if (data.admissionNotes !== undefined) {
     payload.admission_notes = data.admissionNotes || null;
+  }
+  if (data.nationality !== undefined) {
+    payload.nationality = data.nationality || null;
+  }
+  if (data.address !== undefined) {
+    payload.address = data.address || null;
+  }
+  if (data.maritalStatus !== undefined) {
+    payload.marital_status = data.maritalStatus || null;
+  }
+  if (data.birthDate !== undefined) {
+    payload.birth_date = data.birthDate || null;
+  }
+  if (data.email !== undefined) {
+    payload.email = data.email || null;
+  }
+  if (data.foodAllowance !== undefined) {
+    payload.food_allowance = data.foodAllowance || 0;
+  }
+  if (data.transportAllowance !== undefined) {
+    payload.transport_allowance = data.transportAllowance || 0;
+  }
+  if (data.shiftAllowance !== undefined) {
+    payload.shift_allowance = data.shiftAllowance || 0;
+  }
+  if (data.bonus !== undefined) {
+    payload.bonus = data.bonus || 0;
+  }
+  if (data.commission !== undefined) {
+    payload.commission = data.commission || 0;
+  }
+  if (data.gender !== undefined) {
+    payload.gender = data.gender || null;
+  }
+  if (data.nif !== undefined) {
+    payload.nif = data.nif || null;
+  }
+  if (data.bi !== undefined) {
+    payload.bi = data.bi || null;
+  }
+  if (data.socialSecurityNumber !== undefined) {
+    payload.social_security_number = data.socialSecurityNumber || null;
+  }
+  if (data.phone !== undefined) {
+    payload.phone = data.phone || null;
   }
 
   const { error } = await supabase

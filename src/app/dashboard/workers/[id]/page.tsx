@@ -128,9 +128,26 @@ export default function WorkerDetailPage() {
           department: w.department ?? '',
           category: w.category ?? '',
           baseSalary: Number(w.base_salary ?? w.baseSalary ?? 0),
-          contractStatus: (w.status ?? 'Ativo') as Worker['contractStatus'],
+          contractStatus: (w.contract_status ?? w.status ?? 'Ativo') as Worker['contractStatus'],
           type: (w.type ?? 'Eventual') as Worker['type'],
           photoUrl: w.photo_url ?? w.photoUrl ?? undefined,
+          admissionDate: w.admission_date ?? w.admissionDate ?? undefined,
+          contractType: w.contract_type ?? w.contractType ?? undefined,
+          nationality: w.nationality ?? undefined,
+          address: w.address ?? undefined,
+          maritalStatus: w.marital_status ?? w.maritalStatus ?? undefined,
+          birthDate: w.birth_date ?? w.birthDate ?? undefined,
+          email: w.email ?? undefined,
+          foodAllowance: Number(w.food_allowance ?? w.foodAllowance ?? 0),
+          transportAllowance: Number(w.transport_allowance ?? w.transportAllowance ?? 0),
+          shiftAllowance: Number(w.shift_allowance ?? w.shiftAllowance ?? 0),
+          bonus: Number(w.bonus ?? 0),
+          commission: Number(w.commission ?? 0),
+          bi: w.bi ?? undefined,
+          nif: w.nif ?? undefined,
+          social_security_number: w.social_security_number ?? undefined,
+          phone: w.phone ?? undefined,
+          gender: w.gender ?? undefined,
         })) as Worker[];
 
         setWorkers(normalized);
@@ -235,7 +252,24 @@ export default function WorkerDetailPage() {
           baseSalary: Number(data.base_salary ?? data.baseSalary ?? 0),
           contractStatus: (data.contract_status ?? 'Ativo') as Worker['contractStatus'],
           type: (data.type ?? 'Eventual') as Worker['type'],
-          photoUrl: data.photo_url ?? undefined,
+          photoUrl: data.photo_url ?? data.photoUrl ?? undefined,
+          admissionDate: data.admission_date ?? data.admissionDate ?? undefined,
+          contractType: data.contract_type ?? data.contractType ?? undefined,
+          nationality: data.nationality ?? undefined,
+          address: data.address ?? undefined,
+          maritalStatus: data.marital_status ?? data.maritalStatus ?? undefined,
+          birthDate: data.birth_date ?? data.birthDate ?? undefined,
+          email: data.email ?? undefined,
+          foodAllowance: Number(data.food_allowance ?? data.foodAllowance ?? 0),
+          transportAllowance: Number(data.transport_allowance ?? data.transportAllowance ?? 0),
+          shiftAllowance: Number(data.shift_allowance ?? data.shiftAllowance ?? 0),
+          bonus: Number(data.bonus ?? 0),
+          commission: Number(data.commission ?? 0),
+          bi: data.bi ?? undefined,
+          nif: data.nif ?? undefined,
+          social_security_number: data.social_security_number ?? undefined,
+          phone: data.phone ?? undefined,
+          gender: data.gender ?? undefined,
         };
         setWorker(normalized);
       }
@@ -349,6 +383,24 @@ export default function WorkerDetailPage() {
         baseSalary: updatedData.baseSalary ?? worker.baseSalary,
         contractStatus: updatedData.contractStatus ?? worker.contractStatus,
         type: updatedData.type ?? worker.type,
+        photoUrl: updatedData.photoUrl ?? worker.photoUrl,
+        admissionDate: updatedData.admissionDate ?? worker.admissionDate,
+        contractType: updatedData.contractType ?? worker.contractType,
+        nationality: updatedData.nationality ?? worker.nationality,
+        address: updatedData.address ?? worker.address,
+        maritalStatus: updatedData.maritalStatus ?? worker.maritalStatus,
+        birthDate: updatedData.birthDate ?? worker.birthDate,
+        email: updatedData.email ?? worker.email,
+        foodAllowance: updatedData.foodAllowance ?? worker.foodAllowance,
+        transportAllowance: updatedData.transportAllowance ?? worker.transportAllowance,
+        shiftAllowance: updatedData.shiftAllowance ?? worker.shiftAllowance,
+        bonus: updatedData.bonus ?? worker.bonus,
+        commission: updatedData.commission ?? worker.commission,
+        bi: updatedData.bi ?? worker.bi,
+        nif: updatedData.nif ?? worker.nif,
+        socialSecurityNumber: updatedData.social_security_number ?? worker.social_security_number,
+        phone: updatedData.phone ?? worker.phone,
+        gender: updatedData.gender ?? worker.gender,
       };
 
       await updateWorkerSupabase(worker.id, fullData);
@@ -645,16 +697,16 @@ export default function WorkerDetailPage() {
               <Card>
                 <CardHeader><CardTitle className="font-headline text-lg">Informações Pessoais</CardTitle></CardHeader>
                 <CardContent className="grid md:grid-cols-3 gap-x-6 gap-y-4 text-sm">
-                  <div><p className="text-muted-foreground">Nacionalidade</p><p className="font-medium">Angolana</p></div>
-                  <div><p className="text-muted-foreground">Estado Civil</p><p className="font-medium">N/A</p></div>
-                  <div><p className="text-muted-foreground">Data de Nascimento</p><p className="font-medium">N/A</p></div>
-                  <div><p className="text-muted-foreground">Gênero</p><p className="font-medium">Masculino</p></div>
-                  <div className="md:col-span-2"><p className="text-muted-foreground">Residência</p><p className="font-medium">Luanda-Viana/ Estalagem</p></div>
-                  <div><p className="text-muted-foreground">NIF</p><p className="font-medium">N/A</p></div>
-                  <div><p className="text-muted-foreground">Nº Seg. Social</p><p className="font-medium">N/A</p></div>
-                  <div><p className="text-muted-foreground">Nº B.I.</p><p className="font-medium">006158685LA044</p></div>
-                  <div className="md:col-span-2"><p className="text-muted-foreground">Email</p><p className="font-medium">emanuelcosta63@gmail.com</p></div>
-                  <div><p className="text-muted-foreground">Contacto</p><p className="font-medium">N/A</p></div>
+                  <div><p className="text-muted-foreground">Nacionalidade</p><p className="font-medium">{worker.nationality || 'N/A'}</p></div>
+                  <div><p className="text-muted-foreground">Estado Civil</p><p className="font-medium">{worker.maritalStatus || 'N/A'}</p></div>
+                  <div><p className="text-muted-foreground">Data de Nascimento</p><p className="font-medium">{worker.birthDate || 'N/A'}</p></div>
+                  <div><p className="text-muted-foreground">Gênero</p><p className="font-medium">{worker.gender || 'N/A'}</p></div>
+                  <div className="md:col-span-2"><p className="text-muted-foreground">Residência</p><p className="font-medium">{worker.address || 'N/A'}</p></div>
+                  <div><p className="text-muted-foreground">NIF</p><p className="font-medium">{worker.nif || 'N/A'}</p></div>
+                  <div><p className="text-muted-foreground">Nº Seg. Social</p><p className="font-medium">{worker.social_security_number || 'N/A'}</p></div>
+                  <div><p className="text-muted-foreground">Nº B.I.</p><p className="font-medium">{worker.bi || 'N/A'}</p></div>
+                  <div className="md:col-span-2"><p className="text-muted-foreground">Email</p><p className="font-medium">{worker.email || 'N/A'}</p></div>
+                  <div><p className="text-muted-foreground">Contacto</p><p className="font-medium">{worker.phone || 'N/A'}</p></div>
                 </CardContent>
               </Card>
               <Card>
@@ -663,8 +715,8 @@ export default function WorkerDetailPage() {
                   <div><p className="text-muted-foreground">Tipo de Trabalhador</p><p className="font-medium">{worker.type}</p></div>
                   <div><p className="text-muted-foreground">Departamento</p><p className="font-medium">{worker.department}</p></div>
                   <div><p className="text-muted-foreground">Estado do Contrato</p><p className="font-medium">{worker.contractStatus}</p></div>
-                  <div><p className="text-muted-foreground">Data de Admissão</p><p className="font-medium">N/A</p></div>
-                  <div><p className="text-muted-foreground">Tipo de Contrato</p><p className="font-medium">N/A</p></div>
+                  <div><p className="text-muted-foreground">Data de Admissão</p><p className="font-medium">{worker.admissionDate || 'N/A'}</p></div>
+                  <div><p className="text-muted-foreground">Tipo de Contrato</p><p className="font-medium">{worker.contractType || 'N/A'}</p></div>
                   <div><p className="text-muted-foreground">ID do Trabalhador</p><p className="font-medium">{worker.id}</p></div>
                 </CardContent>
               </Card>
@@ -683,11 +735,11 @@ export default function WorkerDetailPage() {
                       </div>
                     </div>
                     <div className="space-y-4 text-sm">
-                      <div className="flex justify-between items-center"><p>Subsídio de Alimentação</p><p className="font-medium">Kz 0,00</p></div>
-                      <div className="flex justify-between items-center"><p>Subsídio de Transporte</p><p className="font-medium">Kz 0,00</p></div>
-                      <div className="flex justify-between items-center"><p>Subsídio de Turno</p><p className="font-medium">N/A</p></div>
-                      <div className="flex justify-between items-center"><p>Subsídio de Prémio</p><p className="font-medium">Kz 0,00</p></div>
-                      <div className="flex justify-between items-center"><p>Subsídio de Comissões</p><p className="font-medium">Kz 0,00</p></div>
+                      <div className="flex justify-between items-center"><p>Subsídio de Alimentação</p><p className="font-medium">Kz {(worker.foodAllowance || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p></div>
+                      <div className="flex justify-between items-center"><p>Subsídio de Transporte</p><p className="font-medium">Kz {(worker.transportAllowance || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p></div>
+                      <div className="flex justify-between items-center"><p>Subsídio de Turno</p><p className="font-medium">Kz {(worker.shiftAllowance || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p></div>
+                      <div className="flex justify-between items-center"><p>Subsídio de Prémio</p><p className="font-medium">Kz {(worker.bonus || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p></div>
+                      <div className="flex justify-between items-center"><p>Subsídio de Comissões</p><p className="font-medium">Kz {(worker.commission || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p></div>
                     </div>
                   </div>
                 </CardContent>
