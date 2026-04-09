@@ -530,75 +530,221 @@ export default function WorkerDetailPage() {
           <DialogTrigger asChild>
             <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Editar Perfil</Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar Perfil</DialogTitle>
-              <DialogDescription>
-                Faça alterações nas informações do trabalhador.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const updatedData = {
-                name: formData.get('name') as string,
-                role: formData.get('role') as string,
-                department: formData.get('department') as string,
-                baseSalary: Number(formData.get('salary')),
-                contractStatus: formData.get('status') as Worker['contractStatus'],
-                type: formData.get('type') as Worker['type'],
-              };
-              handleUpdateWorker(updatedData);
-            }}>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">Nome</Label>
-                  <Input id="name" name="name" defaultValue={worker.name} className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="role" className="text-right">Função</Label>
-                  <Input id="role" name="role" defaultValue={worker.role} className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="department" className="text-right">Departamento</Label>
-                  <Input id="department" name="department" defaultValue={worker.department} className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="salary" className="text-right">Salário Base</Label>
-                  <Input id="salary" name="salary" type="number" defaultValue={worker.baseSalary} className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="status" className="text-right">Estado</Label>
-                  <Select name="status" defaultValue={worker.contractStatus}>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Ativo">Ativo</SelectItem>
-                      <SelectItem value="Suspenso">Suspenso</SelectItem>
-                      <SelectItem value="Concluído">Concluído</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="type" className="text-right">Tipo</Label>
-                  <Select name="type" defaultValue={worker.type}>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Fixo">Fixo</SelectItem>
-                      <SelectItem value="Eventual">Eventual</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <DialogClose asChild><Button type="button" variant="secondary">Cancelar</Button></DialogClose>
-                <Button type="submit">Guardar Alterações</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
+         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+  <DialogHeader>
+    <DialogTitle>Adicionar Novo Trabalhador</DialogTitle>
+    <DialogDescription>
+      Preencha os dados do trabalhador e mantenha em atualização para a empresa.
+    </DialogDescription>
+  </DialogHeader>
+  <form onSubmit={(e) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const updatedData = {
+      name: formData.get('name') as string,
+      role: formData.get('role') as string,
+      department: formData.get('department') as string,
+      category: formData.get('category') as string,
+      baseSalary: Number(formData.get('baseSalary')),
+      admissionDate: formData.get('admissionDate') as string,
+      contractType: formData.get('contractType') as string,
+      gender: formData.get('gender') as string,
+      bi: formData.get('bi') as string,
+      nif: formData.get('nif') as string,
+      social_security_number: formData.get('socialSecurity') as string,
+      phone: formData.get('phone') as string,
+      email: formData.get('email') as string,
+      birthDate: formData.get('birthDate') as string,
+      nationality: formData.get('nationality') as string,
+      maritalStatus: formData.get('maritalStatus') as string,
+      address: formData.get('address') as string,
+      foodAllowance: Number(formData.get('foodAllowance')),
+      transportAllowance: Number(formData.get('transportAllowance')),
+      shiftAllowance: Number(formData.get('shiftAllowance')),
+      bonus: Number(formData.get('bonus')),
+      commission: Number(formData.get('commission')),
+      contractStatus: formData.get('contractStatus') as Worker['contractStatus'],
+      type: formData.get('type') as Worker['type'],
+    };
+    handleUpdateWorker(updatedData);
+  }}>
+    <div className="space-y-6 py-4">
+
+      {/* Upload de Foto */}
+      <div
+        className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <Camera className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+        <p className="text-sm text-muted-foreground">Carregar Foto</p>
+        <p className="text-xs text-muted-foreground/70">Clique ou arraste uma imagem</p>
+      </div>
+
+      {/* Dados Pessoais */}
+      <div>
+        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide border-b pb-2 mb-4">Dados Pessoais</h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="name">Nome Completo</Label>
+            <Input id="name" name="name" defaultValue={worker.name} placeholder="Nome do trabalhador" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="role">Função</Label>
+            <Input id="role" name="role" defaultValue={worker.role} placeholder="Ex: Estivador" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="department">Departamento</Label>
+            <Input id="department" name="department" defaultValue={worker.department} placeholder="Ex: Logística" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="category">Categoria Profissional</Label>
+            <Input id="category" name="category" defaultValue={worker.category} placeholder="Ex: Classe de Obra 1" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="baseSalary">Salário Base (AOA)</Label>
+            <Input id="baseSalary" name="baseSalary" type="number" defaultValue={worker.baseSalary} placeholder="0" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="admissionDate">Data de Admissão</Label>
+            <Input id="admissionDate" name="admissionDate" type="date" defaultValue={worker.admissionDate} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="contractType">Tipo de Contrato</Label>
+            <Select name="contractType" defaultValue={worker.contractType}>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Indeterminado">A Tempo Indeterminado</SelectItem>
+                <SelectItem value="Determinado">A Tempo Determinado</SelectItem>
+                <SelectItem value="Eventual">Eventual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="gender">Género</Label>
+            <Select name="gender" defaultValue={worker.gender}>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Masculino">Masculino</SelectItem>
+                <SelectItem value="Feminino">Feminino</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {/* Dados de Identificação */}
+      <div>
+        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide border-b pb-2 mb-4">Dados de Identificação</h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="bi">Número de Bilhete de Identidade</Label>
+            <Input id="bi" name="bi" defaultValue={worker.bi} placeholder="Ex: 123456789" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="nif">Número de NIF</Label>
+            <Input id="nif" name="nif" defaultValue={worker.nif} placeholder="Ex: 123456789" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="socialSecurity">Número de Seguro Social</Label>
+            <Input id="socialSecurity" name="socialSecurity" defaultValue={worker.social_security_number} placeholder="Ex: 123-456-789" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="phone">Telefone</Label>
+            <Input id="phone" name="phone" defaultValue={worker.phone} placeholder="+244 9xx xxx xxx" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" name="email" type="email" defaultValue={worker.email} placeholder="exemplo@email.com" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="birthDate">Data de Nascimento</Label>
+            <Input id="birthDate" name="birthDate" type="date" defaultValue={worker.birthDate} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="nationality">Nacionalidade</Label>
+            <Input id="nationality" name="nationality" defaultValue={worker.nationality} placeholder="Ex: Angolano" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="maritalStatus">Estado Civil</Label>
+            <Select name="maritalStatus" defaultValue={worker.maritalStatus}>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Solteiro/a">Solteiro/a</SelectItem>
+                <SelectItem value="Casado/a">Casado/a</SelectItem>
+                <SelectItem value="Divorciado/a">Divorciado/a</SelectItem>
+                <SelectItem value="Viúvo/a">Viúvo/a</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1 col-span-2">
+            <Label htmlFor="address">Morada</Label>
+            <Input id="address" name="address" defaultValue={worker.address} placeholder="Endereço completo" />
+          </div>
+        </div>
+      </div>
+
+      {/* Subsídios */}
+      <div>
+        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide border-b pb-2 mb-4">Subsídios e Remunerações</h4>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="foodAllowance">Subsídio de Alimentação (AOA)</Label>
+            <Input id="foodAllowance" name="foodAllowance" type="number" defaultValue={worker.foodAllowance} placeholder="0" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="transportAllowance">Subsídio de Transporte (AOA)</Label>
+            <Input id="transportAllowance" name="transportAllowance" type="number" defaultValue={worker.transportAllowance} placeholder="0" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="bonus">Bónus (AOA)</Label>
+            <Input id="bonus" name="bonus" type="number" defaultValue={worker.bonus} placeholder="0" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="shiftAllowance">Subsídio de Turno (AOA)</Label>
+            <Input id="shiftAllowance" name="shiftAllowance" type="number" defaultValue={worker.shiftAllowance} placeholder="0" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="commission">Comissões (AOA)</Label>
+            <Input id="commission" name="commission" type="number" defaultValue={worker.commission} placeholder="0" />
+          </div>
+        </div>
+      </div>
+
+      {/* Estado do Contrato */}
+      <div>
+        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide border-b pb-2 mb-4">Estado do Contrato</h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="contractStatus">Estado do Contrato</Label>
+            <Select name="contractStatus" defaultValue={worker.contractStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Ativo">Ativo</SelectItem>
+                <SelectItem value="Suspenso">Suspenso</SelectItem>
+                <SelectItem value="Concluído">Concluído</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="type">Tipo</Label>
+            <Select name="type" defaultValue={worker.type}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Eventual">Eventual</SelectItem>
+                <SelectItem value="Fixo">Fixo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <DialogFooter>
+      <DialogClose asChild><Button type="button" variant="secondary">Cancelar</Button></DialogClose>
+      <Button type="submit">Guardar</Button>
+    </DialogFooter>
+  </form>
+</DialogContent>
         </Dialog>
       </DashboardHeader>
 
